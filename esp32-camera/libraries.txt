@@ -1,0 +1,111 @@
+# Thư viện cần thiết cho ESP32-CAM + OLED + Speaker
+
+## Arduino IDE Libraries
+
+### 1. Adafruit SSD1306
+- **Tên:** Adafruit SSD1306
+- **Tác giả:** Adafruit Industries
+- **Mô tả:** Thư viện cho màn hình OLED SSD1306
+- **Cài đặt:** Tools → Manage Libraries → Search "Adafruit SSD1306"
+
+### 2. Adafruit GFX Library
+- **Tên:** Adafruit GFX Library
+- **Tác giả:** Adafruit Industries
+- **Mô tả:** Thư viện đồ họa cơ bản cho Adafruit displays
+- **Cài đặt:** Tools → Manage Libraries → Search "Adafruit GFX Library"
+
+### 3. ESP32-audioI2S
+- **Tên:** ESP32-audioI2S
+- **Tác giả:** schreibfaul1
+- **Mô tả:** Thư viện phát âm thanh qua I2S cho ESP32
+- **Cài đặt:** Tools → Manage Libraries → Search "ESP32-audioI2S"
+- **GitHub:** https://github.com/schreibfaul1/ESP32-audioI2S
+
+### 4. ArduinoJson
+- **Tên:** ArduinoJson
+- **Tác giả:** Benoit Blanchon
+- **Mô tả:** Thư viện xử lý JSON
+- **Cài đặt:** Tools → Manage Libraries → Search "ArduinoJson"
+
+### 5. HTTPClient
+- **Tên:** HTTPClient (Built-in)
+- **Mô tả:** Thư viện HTTP client có sẵn trong ESP32
+- **Không cần cài đặt**
+
+## Cài đặt thủ công (nếu cần)
+
+### 1. Tải thư viện từ GitHub:
+```
+https://github.com/adafruit/Adafruit_SSD1306
+https://github.com/adafruit/Adafruit-GFX-Library
+https://github.com/schreibfaul1/ESP32-audioI2S
+https://github.com/bblanchon/ArduinoJson
+```
+
+### 2. Cài đặt thủ công:
+1. Tải file .zip từ GitHub
+2. Arduino IDE → Sketch → Include Library → Add .ZIP Library
+3. Chọn file .zip đã tải
+
+## Kiểm tra cài đặt
+
+### Test code để kiểm tra thư viện:
+```cpp
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Audio.h>
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("All libraries loaded successfully!");
+}
+
+void loop() {
+  // Test code here
+}
+```
+
+## Lưu ý quan trọng
+
+### 1. Phiên bản thư viện:
+- **Adafruit SSD1306:** >= 2.5.0
+- **Adafruit GFX Library:** >= 1.11.0
+- **ESP32-audioI2S:** >= 2.0.0
+- **ArduinoJson:** >= 6.0.0
+
+### 2. Board Manager:
+- **ESP32 Board:** esp32 by Espressif Systems
+- **Version:** >= 2.0.0
+
+### 3. Cài đặt Board:
+1. File → Preferences
+2. Thêm URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
+3. Tools → Board → Boards Manager
+4. Search "esp32" và cài đặt
+
+## Troubleshooting
+
+### Lỗi thường gặp:
+
+#### 1. "No such file or directory":
+- Kiểm tra tên thư viện chính xác
+- Cài đặt lại thư viện
+
+#### 2. "Compilation error":
+- Kiểm tra phiên bản thư viện
+- Cập nhật Arduino IDE
+
+#### 3. "Library not found":
+- Restart Arduino IDE
+- Kiểm tra đường dẫn thư viện
+
+### Kiểm tra thư viện đã cài:
+```
+File → Examples → [Tên thư viện]
+```
+
+Nếu thấy examples của thư viện thì đã cài thành công.
