@@ -1,157 +1,278 @@
-# 🎯 Face Recognition Attendance System - ESP32-CAM Module
+# 🎯 Face Recognition Attendance System
 
-Hệ thống điểm danh bằng nhận dạng khuôn mặt sử dụng ESP32-CAM với giao diện web tích hợp.
+## 📋 Tổng quan
 
-## 📁 Cấu trúc dự án
+Hệ thống điểm danh bằng nhận dạng khuôn mặt sử dụng ESP32-CAM và Python FastAPI. Hệ thống cho phép đăng ký người dùng mới và điểm danh tự động thông qua nhận dạng khuôn mặt.
+
+## 🏗️ Kiến trúc hệ thống
 
 ```
 DACN/
-├── esp32-camera/              # Module ESP32-CAM
-│   ├── CameraWebServer/       # Code Arduino cho ESP32
-│   │   └── CameraWebServer.ino # File chính
-│   ├── libraries.txt          # Danh sách thư viện cần thiết
-│   ├── README.md              # Hướng dẫn ESP32
-│   └── wiring_diagram_oled_speaker.md # Sơ đồ nối dây
-├── example/                   # Code mẫu gốc
-│   ├── CameraWebServer.ino    # Example từ Arduino
-│   └── ...                    # Các file hỗ trợ
-├── docs/                      # Tài liệu
-│   └── api_docs.md           # API documentation
-├── PROJECT_SUMMARY.md         # Tóm tắt dự án
-├── workflow.txt              # Kế hoạch thực hiện
-└── README.md                 # File này
+├── 📁 esp32-camera/          # ESP32-CAM code và tài liệu
+│   ├── CameraWebServer/      # Arduino code cho ESP32-CAM
+│   ├── README.md            # Hướng dẫn ESP32-CAM
+│   └── libraries.txt        # Danh sách thư viện Arduino
+├── 📁 server/               # Python backend
+│   ├── api/                 # FastAPI endpoints
+│   ├── core/                # Cấu hình hệ thống
+│   ├── database/            # Database schema
+│   ├── models/              # SQLAlchemy models
+│   ├── services/            # Business logic
+│   ├── uploads/             # Thư mục lưu ảnh
+│   ├── web_app.py           # Streamlit web interface
+│   ├── run.py               # Script chạy hệ thống
+│   └── requirements.txt     # Python dependencies
+├── 📁 docs/                 # Tài liệu API
+└── README.md               # File này
 ```
 
-## 🛠️ Tính năng ESP32-CAM
+## 🚀 Tính năng chính
 
-### ✅ Đã hoàn thành:
-- **Camera streaming** với độ phân giải tối ưu
-- **Web interface** hiện đại với giao diện tiếng Việt
-- **Face detection** thời gian thực
-- **Auto capture** khi phát hiện khuôn mặt
-- **API integration** với server Python
-- **OLED display** hiển thị thông tin
-- **Speaker notification** với TTS
-- **WiFi management** tự động kết nối
-- **Error handling** và monitoring
+### ESP32-CAM
+- ✅ **Web interface** hiện đại với modal system
+- ✅ **Camera streaming** real-time
+- ✅ **Image capture** với quality check
+- ✅ **CORS support** cho cross-origin requests
+- ✅ **Responsive design** cho mobile và desktop
 
-### 🔧 Hardware cần thiết:
+### Python Backend
+- ✅ **FastAPI** với async support
+- ✅ **PostgreSQL** với pgvector extension
+- ✅ **Face recognition** sử dụng OpenCV
+- ✅ **128D embeddings** cho face matching
+- ✅ **RESTful API** với proper error handling
+
+### Web Interface
+- ✅ **Streamlit** dashboard
+- ✅ **Real-time statistics**
+- ✅ **User management**
+- ✅ **Attendance logs**
+
+## 🛠️ Cài đặt và chạy
+
+### 1. **ESP32-CAM Setup**
+
+#### Hardware Requirements:
 - ESP32-CAM module
-- OLED I2C 128x64 SSD1306
-- Mini Speaker với PAM8403 amplifier
+- MicroSD card (optional)
+- USB cable
 - Breadboard và dây nối
-- Nguồn 5V/2A
 
-## 🚀 Cách sử dụng
+#### Software Setup:
+```bash
+# 1. Cài đặt Arduino IDE
+# 2. Cài đặt ESP32 board package
+# 3. Cài đặt thư viện (xem esp32-camera/libraries.txt)
 
-### 1. Chuẩn bị phần cứng
-- Kết nối ESP32-CAM theo sơ đồ trong `wiring_diagram_oled_speaker.md`
-- Cấp nguồn 5V cho module
-
-### 2. Cài đặt code
-- Mở `esp32-camera/CameraWebServer/CameraWebServer.ino` trong Arduino IDE
-- Cài đặt các thư viện trong `libraries.txt`
-- Cấu hình WiFi credentials trong code
-- Upload code lên ESP32-CAM
-
-### 3. Kết nối và sử dụng
-- ESP32 sẽ tạo WiFi hotspot hoặc kết nối WiFi
-- Mở browser và truy cập IP của ESP32
-- Sử dụng giao diện web để:
-  - Xem camera stream
-  - Test kết nối server
-  - Đăng ký người dùng mới
-  - Điểm danh bằng khuôn mặt
-
-## 📋 API Endpoints
-
-ESP32-CAM cung cấp các endpoint sau:
-
-- `GET /` - Giao diện web chính
-- `GET /stream` - Camera stream (port 81)
-- `POST /checkin` - Điểm danh
-- `POST /register` - Đăng ký người dùng
-- `GET /status` - Trạng thái hệ thống
-- `GET /health` - Health check
-
-## 🔧 Cấu hình
-
-### WiFi Settings
-```cpp
+# 4. Cấu hình WiFi trong CameraWebServer.ino:
 const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
+const char* serverUrl = "http://YOUR_SERVER_IP:8000";
+
+# 5. Upload code lên ESP32-CAM
 ```
 
-### Server Settings
-```cpp
-const char* serverUrl = "http://YOUR_SERVER_IP:5000";
+### 2. **Python Backend Setup**
+
+```bash
+# 1. Cài đặt Python 3.8+
+# 2. Cài đặt PostgreSQL với pgvector extension
+# 3. Clone repository
+cd server
+
+# 4. Tạo virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# hoặc
+venv\Scripts\activate     # Windows
+
+# 5. Cài đặt dependencies
+pip install -r requirements.txt
+
+# 6. Cấu hình database
+# Sửa server/core/config.py với thông tin database của bạn
+
+# 7. Khởi tạo database
+python reset_db.py
+
+# 8. Chạy API server
+python run.py api
+
+# 9. Chạy web interface (terminal khác)
+streamlit run web_app.py --server.port 8501
 ```
 
-### Camera Settings
-```cpp
-config.frame_size = FRAMESIZE_QVGA;  // 320x240
-config.jpeg_quality = 12;            // Quality 0-63
+### 3. **Database Setup**
+
+```sql
+-- Tạo database
+CREATE DATABASE face_attendance;
+
+-- Cài đặt pgvector extension
+CREATE EXTENSION vector;
+
+-- Chạy schema
+\i server/database/schema.sql
 ```
 
-## 📊 Tính năng nâng cao
+## 📱 Cách sử dụng
 
-### Real-time Face Detection
-- Phát hiện khuôn mặt trong stream
-- Vẽ bounding box tự động
-- Auto capture khi khuôn mặt ổn định
+### 1. **Truy cập ESP32-CAM**
+- Mở browser: `http://[ESP32_IP]`
+- Nhấn "Kết nối Server"
+- Chờ camera stream khởi động
 
-### Voice Notifications
-- Thông báo bằng giọng nói
-- TTS integration
-- Custom messages cho từng trường hợp
+### 2. **Đăng ký người dùng mới**
+- Nhấn "Đăng ký"
+- Chụp ảnh khuôn mặt
+- Nhập thông tin: Họ tên, Mã sinh viên
+- Nhấn "Đăng ký"
 
-### OLED Display
-- Hiển thị trạng thái hệ thống
-- Thông tin người dùng
-- Debug information
+### 3. **Điểm danh**
+- Nhấn "Điểm danh"
+- Chụp ảnh khuôn mặt
+- Hệ thống tự động nhận diện và điểm danh
 
-### Error Handling
-- WiFi reconnection
-- Memory monitoring
-- Watchdog timer
-- Restart reason detection
+### 4. **Quản lý qua Web Interface**
+- Truy cập: `http://localhost:8501`
+- Xem dashboard, thống kê, logs
+
+## 🔧 API Endpoints
+
+### Health Check
+```http
+GET /api/v1/health
+```
+
+### User Management
+```http
+POST /api/v1/register
+GET /api/v1/users
+```
+
+### Attendance
+```http
+POST /api/v1/checkin
+GET /api/v1/attendance/logs
+GET /api/v1/attendance/stats
+```
+
+### Face Detection
+```http
+POST /api/v1/detect-faces
+```
+
+## 📊 Database Schema
+
+### Users Table
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    student_code VARCHAR(20) UNIQUE NOT NULL,
+    department VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Face Embeddings Table
+```sql
+CREATE TABLE face_embeddings (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    embedding VECTOR(128) NOT NULL,
+    confidence FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Attendance Logs Table
+```sql
+CREATE TABLE attendance_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confidence FLOAT,
+    device_id VARCHAR(50)
+);
+```
+
+## 🎨 Giao diện
+
+### ESP32-CAM Web Interface
+- **Modern UI** với gradient và glassmorphism
+- **Modal system** cho đăng ký và điểm danh
+- **Real-time camera stream**
+- **Quality check** cho ảnh chụp
+- **Responsive design**
+
+### Streamlit Dashboard
+- **Statistics overview**
+- **User management**
+- **Attendance logs**
+- **Real-time updates**
+
+## 🔒 Bảo mật
+
+- **CORS headers** cho cross-origin requests
+- **Input validation** với Pydantic
+- **SQL injection protection** với SQLAlchemy
+- **Error handling** không tiết lộ thông tin nhạy cảm
+
+## 📈 Performance
+
+- **Async FastAPI** cho high performance
+- **Vector similarity search** với pgvector
+- **Image optimization** cho ESP32-CAM
+- **Database indexing** cho fast queries
 
 ## 🐛 Troubleshooting
 
-### ESP32 không kết nối WiFi
-- Kiểm tra SSID và password
-- Đảm bảo WiFi 2.4GHz
-- Reset ESP32 và thử lại
+### ESP32-CAM Issues
+- **Camera không hoạt động**: Kiểm tra kết nối hardware
+- **WiFi không kết nối**: Kiểm tra SSID/password
+- **Stream không hiển thị**: Kiểm tra CORS headers
 
-### Camera không hiển thị
-- Kiểm tra kết nối camera
-- Thử giảm độ phân giải
-- Kiểm tra nguồn điện
+### Backend Issues
+- **Database connection**: Kiểm tra PostgreSQL service
+- **Face detection**: Kiểm tra chất lượng ảnh
+- **API errors**: Xem server logs
 
-### Server không phản hồi
-- Kiểm tra IP server trong code
-- Đảm bảo server đang chạy
-- Kiểm tra firewall
+### Common Solutions
+1. **Restart services**: ESP32, API server, database
+2. **Check logs**: Console, server logs
+3. **Verify network**: IP addresses, ports
+4. **Test endpoints**: curl, Postman
 
 ## 📚 Tài liệu tham khảo
 
-- [ESP32-CAM Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/camera.html)
-- [Arduino IDE Setup](https://docs.arduino.cc/software/ide-v2)
-- [WiFi Library](https://github.com/espressif/arduino-esp32)
+- [ESP32-CAM Documentation](esp32-camera/README.md)
+- [API Documentation](docs/api_docs.md)
+- [Arduino Libraries](esp32-camera/libraries.txt)
 
-## 🤝 Đóng góp
+## 👥 Đóng góp
 
 1. Fork repository
 2. Tạo feature branch
 3. Commit changes
-4. Push và tạo Pull Request
+4. Push to branch
+5. Tạo Pull Request
 
 ## 📄 License
 
 MIT License - Xem file LICENSE để biết thêm chi tiết.
 
+## 🏆 Credits
+
+- **ESP32-CAM**: Espressif Systems
+- **FastAPI**: Sebastián Ramírez
+- **OpenCV**: Intel Corporation
+- **PostgreSQL**: PostgreSQL Global Development Group
+- **Streamlit**: Streamlit Inc.
+
 ---
 
-**Phát triển bởi: [Tên sinh viên]**  
-**Trường: HUTECH**  
-**Năm: 2024**
+**Version**: 2.0  
+**Last Updated**: 2024  
+**Author**: [Tên sinh viên]

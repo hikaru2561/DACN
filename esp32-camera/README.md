@@ -1,135 +1,141 @@
-# ESP32-CAM Face Recognition System
+# 📸 ESP32-CAM Face Recognition System
 
-## 📁 Cấu trúc thư mục
+## 🎯 Tổng quan
+
+ESP32-CAM với giao diện web hiện đại cho hệ thống nhận dạng khuôn mặt. Hỗ trợ đăng ký và điểm danh người dùng thông qua camera streaming real-time.
+
+## ✨ Tính năng
+
+- 🎥 **Camera streaming** real-time với CORS support
+- 🖥️ **Web interface** hiện đại với modal system
+- 📸 **Image capture** với quality check
+- 🔗 **API integration** với Python backend
+- 📱 **Responsive design** cho mobile và desktop
+- ⚡ **Fast processing** với optimized algorithms
+
+## 🛠️ Phần cứng
+
+### Required:
+- ESP32-CAM module
+- USB cable
+- Breadboard và dây nối
+
+### Optional:
+- MicroSD card
+- OLED display (SSD1306)
+- Speaker + PAM8403
+
+## 📦 Cài đặt
+
+### 1. **Arduino IDE Setup**
+```bash
+# Cài đặt Arduino IDE 1.8.19+
+# Cài đặt ESP32 board package
+# Cài đặt thư viện (xem libraries.txt)
 ```
-esp32-camera/
-├── CameraWebServer/
-│   └── CameraWebServer.ino    # Code chính cho ESP32-CAM
-├── libraries.txt              # Danh sách thư viện cần thiết
-├── wiring_diagram_oled_speaker.md  # Sơ đồ kết nối OLED + Speaker
-└── README.md                  # File này
-```
 
-## 🚀 Cài đặt nhanh
-
-### 1. Cài đặt thư viện
-Mở Arduino IDE → Tools → Manage Libraries → Cài đặt:
-- `Adafruit SSD1306` (cho OLED)
-- `Adafruit GFX Library` (cho OLED)
-- `ESP32-audioI2S` (cho Speaker)
-
-### 2. Cấu hình WiFi
-Sửa trong `CameraWebServer.ino`:
+### 2. **Cấu hình**
 ```cpp
-const char* ssid = "TEN_WIFI_CUA_BAN";
-const char* password = "MAT_KHAU_WIFI";
+// Sửa trong CameraWebServer.ino:
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+const char* serverUrl = "http://YOUR_SERVER_IP:8000";
 ```
 
-### 3. Cấu hình Server
-Sửa IP server trong `CameraWebServer.ino`:
-```cpp
-const char* serverUrl = "http://192.168.219.62:5000";
+### 3. **Upload Code**
+- Chọn board: **ESP32 Wrover Module**
+- Upload code lên ESP32-CAM
+- Mở Serial Monitor để xem IP
+
+## 🚀 Sử dụng
+
+### 1. **Truy cập Web Interface**
+```
+http://[ESP32_IP]
 ```
 
-## 🎯 Tính năng chính
+### 2. **Kết nối Server**
+- Nhấn "🔗 Kết nối Server"
+- Chờ camera stream khởi động
 
-### ✅ Stream Camera
-- **Độ phân giải:** VGA (640x480) với PSRAM, QVGA (320x240) không PSRAM
-- **Chất lượng:** JPEG quality 8 (cao nhất)
-- **FPS:** ~10-15 FPS mượt mà
-- **Format:** Multipart stream cho browser
+### 3. **Đăng ký người dùng**
+- Nhấn "👤 Đăng ký"
+- Chụp ảnh khuôn mặt
+- Nhập thông tin
+- Nhấn "✅ Đăng ký"
 
-### ✅ Face Detection Simulation
-- **Cooldown:** 3 giây giữa các lần detect
-- **Tần suất:** 20% chance mỗi giây
-- **Khung:** Vị trí cố định ở giữa màn hình
-- **Tự động ẩn:** Sau 2 giây
+### 4. **Điểm danh**
+- Nhấn "✅ Điểm danh"
+- Chụp ảnh khuôn mặt
+- Hệ thống tự động nhận diện
 
-### ✅ Web Interface
-- **Responsive design** với gradient đẹp
-- **Real-time status** hiển thị trạng thái
-- **Control buttons** cho tất cả chức năng
-- **Face overlay** với animation mượt
+## 🎨 Giao diện
+
+### Dashboard chính
+- **Status panel**: Trạng thái hệ thống
+- **Camera container**: Stream camera
+- **Control buttons**: Các chức năng chính
+- **Result panel**: Hiển thị kết quả
+
+### Modal system
+- **Đăng ký modal**: Form nhập thông tin
+- **Điểm danh modal**: Auto processing
+- **Quality check**: Kiểm tra chất lượng ảnh
 
 ## 🔧 API Endpoints
 
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/` | GET | Web interface chính |
-| `/stream` | GET | Camera stream (port 81) |
-| `/snapshot` | GET | Ảnh chụp đơn lẻ |
-| `/checkin` | POST | Điểm danh |
-| `/register` | POST | Đăng ký người dùng |
+### ESP32-CAM Endpoints
+- `GET /` - Dashboard chính
+- `GET /stream` - Camera stream
+- `GET /snapshot` - Ảnh chụp nhanh
+- `GET /test-connection` - Test kết nối server
+- `GET /users` - Lấy danh sách người dùng
+- `GET /status` - Trạng thái hệ thống
 
-## 📊 Cấu hình Camera
-
-### Với PSRAM (ESP32-CAM AI-Thinker)
-```cpp
-config.frame_size = FRAMESIZE_VGA;    // 640x480
-config.jpeg_quality = 8;              // Chất lượng cao
-config.fb_count = 2;                  // Double buffering
-```
-
-### Không PSRAM
-```cpp
-config.frame_size = FRAMESIZE_QVGA;   // 320x240
-config.jpeg_quality = 10;             // Chất lượng tốt
-config.fb_count = 1;                  // Single buffer
-```
-
-## 🔌 Kết nối phần cứng
-
-### OLED SSD1306 (128x64)
-- VCC → 3.3V
-- GND → GND
-- SCL → GPIO 22
-- SDA → GPIO 21
-
-### Speaker + PAM8403
-- VCC → 5V
-- GND → GND
-- IN+ → GPIO 25
-- IN- → GPIO 26
+### Server Integration
+- `POST /api/v1/register` - Đăng ký người dùng
+- `POST /api/v1/checkin` - Điểm danh
+- `GET /api/v1/users` - Danh sách người dùng
 
 ## 🐛 Troubleshooting
 
-### Stream không hiển thị
-1. Kiểm tra IP ESP32 trong Serial Monitor
-2. Truy cập `http://IP:81/stream` trực tiếp
-3. Kiểm tra WiFi connection
+### Camera Issues
+- **Camera không hoạt động**: Kiểm tra kết nối hardware
+- **Stream không hiển thị**: Kiểm tra CORS headers
+- **Ảnh bị lỗi**: Kiểm tra chất lượng ánh sáng
 
-### Face detection spam
-- Đã tối ưu với cooldown 3 giây
-- Tần suất giảm xuống 20%
-- Khung vị trí cố định
+### Network Issues
+- **WiFi không kết nối**: Kiểm tra SSID/password
+- **Server không kết nối**: Kiểm tra IP và port
+- **CORS errors**: Kiểm tra browser console
 
-### Chất lượng ảnh kém
-- Tăng `jpeg_quality` (số càng nhỏ càng tốt)
-- Kiểm tra ánh sáng
-- Điều chỉnh `xclk_freq_hz`
+### Performance Issues
+- **Stream lag**: Giảm resolution hoặc FPS
+- **Memory issues**: Restart ESP32
+- **Slow response**: Kiểm tra network speed
 
-## 📈 Performance
+## 📊 Specifications
 
-- **Memory usage:** ~200KB RAM
-- **Stream bandwidth:** ~500KB/s
-- **Detection accuracy:** 80% (simulation)
-- **Response time:** <100ms
+- **Resolution**: 640x480 (VGA)
+- **Frame Rate**: ~1-2 FPS
+- **WiFi**: 802.11 b/g/n
+- **Memory**: 4MB PSRAM
+- **Storage**: MicroSD (optional)
 
-## 🔄 Cập nhật
+## 🔒 Security
 
-### Version 2.0 (Current)
-- ✅ Multipart stream hoạt động
-- ✅ Face detection tối ưu
-- ✅ Chất lượng ảnh cao
-- ✅ Web interface responsive
+- **CORS headers** cho cross-origin access
+- **Input validation** cho form data
+- **Error handling** không tiết lộ thông tin nhạy cảm
+- **Network security** trong mạng nội bộ
 
-### Version 1.0
-- ❌ Snapshot polling (chậm)
-- ❌ Face detection spam
-- ❌ Chất lượng ảnh thấp
+## 📚 Tài liệu
+
+- [Libraries List](libraries.txt)
+- [Wiring Diagram](wiring_diagram_oled_speaker.md)
+- [Main Project README](../README.md)
 
 ---
 
-**Tác giả:** AI Assistant  
-**Ngày cập nhật:** 2024  
-**Phiên bản:** 2.0
+**Version**: 2.0 Optimized  
+**Last Updated**: 2024

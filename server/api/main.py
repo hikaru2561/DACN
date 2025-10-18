@@ -241,19 +241,26 @@ async def checkin_user(
         image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
         
         # Extract face embedding
+        logger.info(f"Processing checkin image: {image_array.shape}")
         query_embedding = face_service.extract_embedding(image_array)
         if query_embedding is None:
-            raise HTTPException(status_code=400, detail="No face detected in image")
+            logger.warning("No face detected in checkin image")
+            raise HTTPException(status_code=400, detail="Không phát hiện khuôn mặt trong ảnh. Vui lòng chụp lại với khuôn mặt rõ ràng hơn.")
+        
+        logger.info(f"Face embedding extracted: {len(query_embedding)} dimensions")
         
         # Find similar faces with lower threshold for better matching
         similar_faces = db_service.find_similar_faces(
             query_embedding, 
-            threshold=0.2,  # Lower threshold for better matching
+            threshold=0.3,  # Slightly higher threshold for better accuracy
             limit=3
         )
         
+        logger.info(f"Found {len(similar_faces)} similar faces")
+        
         if not similar_faces:
-            raise HTTPException(status_code=404, detail="No matching user found")
+            logger.warning("No matching user found in database")
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng khớp. Vui lòng đăng ký trước khi điểm danh.")
         
         # Get best match
         best_match = similar_faces[0]

@@ -179,13 +179,35 @@ def show_dashboard():
         logs = None
     
     if logs:
-        df_logs = pd.DataFrame(logs)
+        # Flatten the user object for better display
+        flattened_logs = []
+        for log in logs:
+            flattened_log = {
+                'user_name': log.get('user', {}).get('name', 'Unknown'),
+                'student_code': log.get('user', {}).get('student_code', 'Unknown'),
+                'timestamp': log.get('timestamp'),
+                'confidence': log.get('confidence'),
+                'device_id': log.get('device_id', 'N/A')
+            }
+            flattened_logs.append(flattened_log)
+        
+        df_logs = pd.DataFrame(flattened_logs)
         df_logs['timestamp'] = pd.to_datetime(df_logs['timestamp'])
         df_logs = df_logs.sort_values('timestamp', ascending=False).head(10)
         
+        # Format confidence as percentage
+        df_logs['confidence'] = (df_logs['confidence'] * 100).round(1).astype(str) + '%'
+        
         st.dataframe(
-            df_logs[['user', 'timestamp', 'confidence', 'device_id']],
-            use_container_width=True
+            df_logs[['user_name', 'student_code', 'timestamp', 'confidence', 'device_id']],
+            use_container_width=True,
+            column_config={
+                'user_name': 'Tên',
+                'student_code': 'Mã SV',
+                'timestamp': 'Thời gian',
+                'confidence': 'Độ tin cậy',
+                'device_id': 'Thiết bị'
+            }
         )
     else:
         st.info("No recent activity found")

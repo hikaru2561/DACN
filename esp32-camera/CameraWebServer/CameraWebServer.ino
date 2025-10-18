@@ -77,7 +77,7 @@ const char* password = "nk111111";   // Thay đổi password WiFi của bạn
 // ===================
 // Server Configuration
 // ===================
-const char* serverUrl = "http://192.168.219.62:5000"; // Thay đổi IP của máy chủ Python (thay đổi IP này thành IP máy tính của bạn)
+const char* serverUrl = "http://192.168.219.62:8000"; // Thay đổi IP của máy chủ Python (thay đổi IP này thành IP máy tính của bạn)
 
 // ===================
 // Camera Configuration
@@ -273,7 +273,7 @@ void performAutoCapture() {
   esp_camera_fb_return(fb);
 
   HTTPClient http;
-  http.begin(serverUrl + String("/checkin"));
+  http.begin(serverUrl + String("/api/v1/checkin"));
   http.addHeader("Content-Type", "application/json");
   
   String jsonData = "{\"image\":\"" + imageData + "\"}";
@@ -362,7 +362,7 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             opacity: 0.9;
         }
         
-        .main-content {
+        .dashboard {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
@@ -393,21 +393,12 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             justify-content: center;
         }
         
-        #stream {
+        .camera-stream {
             max-width: 100%;
             max-height: 400px;
             border-radius: 10px;
             box-shadow: 0 4px 15px 0 rgba(0,0,0,0.3);
             display: none;
-        }
-        
-        .face-overlay {
-            position: absolute;
-            border: 3px solid #00ff00;
-            border-radius: 5px;
-            display: none;
-            pointer-events: none;
-            box-shadow: 0 0 10px rgba(0,255,0,0.5);
         }
         
         .captured-image {
@@ -458,6 +449,12 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             transform: translateY(0);
         }
         
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .button-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -467,6 +464,10 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         
         .button-group.single {
             grid-template-columns: 1fr;
+        }
+        
+        .button-group.triple {
+            grid-template-columns: 1fr 1fr 1fr;
         }
         
         #result {
@@ -487,18 +488,6 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             text-align: center;
         }
         
-        .face-detection-info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: #00ff00;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            display: none;
-        }
-        
         .loading {
             display: inline-block;
             width: 20px;
@@ -514,12 +503,103 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             100% { transform: rotate(360deg); }
         }
         
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            color: white;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            opacity: 0.7;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .capture-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .capture-btn {
+            background: linear-gradient(45deg, #4ECDC4, #45B7D1);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .capture-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px 0 rgba(31, 38, 135, 0.4);
+        }
+        
+        .capture-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         @media (max-width: 768px) {
-            .main-content {
+            .dashboard {
                 grid-template-columns: 1fr;
             }
             
             .button-group {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-group.triple {
                 grid-template-columns: 1fr;
             }
         }
@@ -537,46 +617,37 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             <p><strong>WiFi:</strong> <span id="wifi">Connected</span></p>
         </div>
         
-        <div class="main-content">
+        <div class="dashboard">
             <div class="left-panel">
                 <div class="camera-container">
                     <div class="camera-placeholder" id="cameraPlaceholder">
-                        📹 Nhấn "Start Camera" để bắt đầu
+                        📹 Nhấn "Kết nối Server" để bắt đầu
                     </div>
-                    <img id="streamImg" alt="Camera Stream" style="width: 100%; height: 300px; object-fit: cover;">
-                    <div class="face-overlay" id="faceOverlay"></div>
-                    <div class="face-detection-info" id="faceDetectionInfo">
-                        Khuôn mặt được phát hiện
-                    </div>
+                    <img id="cameraStream" class="camera-stream" alt="Camera Stream">
                 </div>
                 
                 <div class="button-group">
-                    <button class="button" onclick="startStream()">📹 Start Camera</button>
-                    <button class="button" onclick="stopStream()">⏹️ Stop Camera</button>
+                    <button class="button" onclick="connectServer()">🔗 Kết nối Server</button>
+                    <button class="button" onclick="disconnectServer()">❌ Ngắt kết nối</button>
                 </div>
                 
                 <div class="button-group">
-                    <button class="button" onclick="checkin()">✅ Check-in (Điểm danh)</button>
-                    <button class="button" onclick="register()">👤 Register (Đăng ký)</button>
+                    <button class="button" onclick="startCheckin()">✅ Điểm danh</button>
+                    <button class="button" onclick="startRegister()">👤 Đăng ký</button>
                 </div>
                 
                 <div class="button-group single">
-                    <button class="button" onclick="toggleAutoDetection()" id="autoBtn">🤖 Enable Auto Detection</button>
+                    <button class="button" onclick="getUsers()">👥 Xem danh sách</button>
                 </div>
             </div>
             
             <div class="right-panel">
                 <div id="result"></div>
                 
-                        <div class="button-group">
-                            <button class="button" onclick="testConnection()">🔧 Test Server</button>
-                            <button class="button" onclick="testStream()">📹 Test Stream</button>
-                            <button class="button" onclick="testFaceDetection()">👤 Test Face Detection</button>
-                            <button class="button" onclick="getUsers()">👥 View Users</button>
-                        </div>
-                
-                <div class="button-group single">
-                    <button class="button" onclick="getStatus()">📊 System Status</button>
+                <div class="button-group triple">
+                    <button class="button" onclick="testConnection()">🔧 Test Server</button>
+                    <button class="button" onclick="testStream()">📹 Test Camera</button>
+                    <button class="button" onclick="getStatus()">📊 Status</button>
                 </div>
                 
                 <div id="capturedImageContainer" style="display: none;">
@@ -587,55 +658,145 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         </div>
     </div>
     
+    <!-- Modal cho Đăng ký -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👤 Đăng ký người dùng mới</h2>
+                <span class="close" onclick="closeRegisterModal()">&times;</span>
+            </div>
+            <div id="registerCameraContainer">
+                <img id="registerCameraStream" class="camera-stream" alt="Register Camera Stream">
+                <div class="capture-controls">
+                    <button class="capture-btn" onclick="captureForRegister()">📸 Chụp ảnh</button>
+                    <button class="capture-btn" onclick="retakePhoto()">🔄 Chụp lại</button>
+                </div>
+            </div>
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label for="registerName">Họ và tên:</label>
+                    <input type="text" id="registerName" placeholder="Nhập họ và tên">
+                </div>
+                <div class="form-group">
+                    <label for="registerStudentCode">Mã sinh viên:</label>
+                    <input type="text" id="registerStudentCode" placeholder="Nhập mã sinh viên">
+                </div>
+                <div class="capture-controls">
+                    <button class="capture-btn" onclick="submitRegister()">✅ Đăng ký</button>
+                    <button class="capture-btn" onclick="retakePhoto()">🔄 Chụp lại</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal cho Điểm danh -->
+    <div id="checkinModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✅ Điểm danh</h2>
+                <span class="close" onclick="closeCheckinModal()">&times;</span>
+            </div>
+            <div id="checkinCameraContainer">
+                <img id="checkinCameraStream" class="camera-stream" alt="Checkin Camera Stream">
+                <div class="capture-controls">
+                    <button class="capture-btn" onclick="captureForCheckin()">📸 Chụp ảnh</button>
+                    <button class="capture-btn" onclick="retakePhoto()">🔄 Chụp lại</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script>
+      // Global variables
       let streamInterval;
-      let faceDetectionInterval;
       let isStreaming = false;
       let isUpdating = false;
+      let capturedImageData = null;
+      let currentMode = null; // 'register' or 'checkin'
       
-      function startStream() {
-        console.log('Starting stream...');
-        const streamImg = document.getElementById('streamImg');
+      // ===================
+      // Main Dashboard Functions
+      // ===================
+      
+      function connectServer() {
+        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang kết nối server...</p>';
+        
+        // Test server connection first
+        fetch('/test-connection', {method: 'GET'})
+          .then(response => response.json())
+          .then(data => {
+            if (data.connected) {
+              // Start camera stream
+              startCameraStream();
+              document.getElementById('result').innerHTML = 
+                '<p>✅ <strong>Kết nối thành công!</strong><br>' +
+                'Server: ' + data.server_url + '<br>' +
+                'Camera: Đang khởi động...</p>';
+              document.getElementById('server').textContent = 'Connected';
+              document.getElementById('server').style.color = '#4ECDC4';
+            } else {
+              document.getElementById('result').innerHTML = 
+                '<p>❌ <strong>Không thể kết nối server!</strong><br>' +
+                'URL: ' + data.server_url + '<br>' +
+                'Mã lỗi: ' + data.response_code + '</p>';
+              document.getElementById('server').textContent = 'Disconnected';
+              document.getElementById('server').style.color = '#FF6B6B';
+            }
+          })
+          .catch(error => {
+            document.getElementById('result').innerHTML = 
+              '<p>❌ <strong>Lỗi kết nối:</strong> ' + error + '</p>';
+            document.getElementById('server').textContent = 'Error';
+            document.getElementById('server').style.color = '#FF6B6B';
+          });
+      }
+      
+      function disconnectServer() {
+        stopCameraStream();
+        document.getElementById('result').innerHTML = '<p>🔌 <strong>Đã ngắt kết nối server</strong></p>';
+        document.getElementById('server').textContent = 'Disconnected';
+        document.getElementById('server').style.color = '#FF6B6B';
+      }
+      
+      function startCameraStream() {
+        const cameraStream = document.getElementById('cameraStream');
         const placeholder = document.getElementById('cameraPlaceholder');
         
-        if (!streamImg) {
-          console.error('Stream image element not found!');
+        if (!cameraStream || !placeholder) {
+          console.error('Camera elements not found!');
           return;
         }
         
-        if (!placeholder) {
-          console.error('Placeholder element not found!');
-          return;
-        }
-        
-        console.log('Elements found, starting stream...');
-        streamImg.style.display = 'block';  // Show img element
+        cameraStream.style.display = 'block';
         placeholder.style.display = 'none';
         
         const streamUrl = 'http://' + window.location.hostname + ':81/stream';
-        console.log('Stream URL:', streamUrl);
+        const snapshotUrl = 'http://' + window.location.hostname + ':81/snapshot';
         
-        // Set stream source directly - browser will handle multipart/x-mixed-replace
-        streamImg.src = streamUrl;
+        // Set crossOrigin to allow canvas operations
+        cameraStream.crossOrigin = 'anonymous';
         
-        streamImg.onload = function() {
+        // Try stream first
+        cameraStream.src = streamUrl;
+        
+        cameraStream.onload = function() {
           console.log('Stream loaded successfully');
           document.getElementById('status').textContent = 'Streaming';
           document.getElementById('status').style.color = '#4ECDC4';
+          isStreaming = true;
         };
         
-        streamImg.onerror = function() {
-          console.error('Stream failed to load, trying snapshot method');
+        cameraStream.onerror = function() {
+          console.log('Stream failed, using snapshot fallback');
           
-          // Method 2: Use snapshot polling as fallback
-          const snapshotUrl = 'http://' + window.location.hostname + ':81/snapshot';
-          
+          // Use snapshot polling as fallback
           function updateSnapshot() {
             if (isStreaming && !isUpdating) {
               isUpdating = true;
               const img = new Image();
+              img.crossOrigin = 'anonymous'; // Allow cross-origin access
               img.onload = function() {
-                streamImg.src = img.src;
+                cameraStream.src = img.src;
                 isUpdating = false;
               };
               img.onerror = function() {
@@ -646,337 +807,324 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             }
           }
           
-          // Start snapshot polling
           updateSnapshot();
-          streamInterval = setInterval(updateSnapshot, 800); // Update every 800ms (1.25 FPS)
+          streamInterval = setInterval(updateSnapshot, 800);
           
           document.getElementById('status').textContent = 'Streaming (snapshot)';
           document.getElementById('status').style.color = '#4ECDC4';
+          isStreaming = true;
         };
-        
-        // No need for Method 3, using Method 1 (stream) and Method 2 (snapshot fallback)
-        
-        document.getElementById('status').textContent = 'Streaming';
-        document.getElementById('status').style.color = '#4ECDC4';
-        
-        isStreaming = true;
-        
-        // Start real face detection
-        startRealFaceDetection();
       }
       
-      function stopStream() {
-        const streamImg = document.getElementById('streamImg');
+      function stopCameraStream() {
+        const cameraStream = document.getElementById('cameraStream');
         const placeholder = document.getElementById('cameraPlaceholder');
         
-        // Stop snapshot polling
         if (streamInterval) {
           clearInterval(streamInterval);
           streamInterval = null;
         }
         
-        streamImg.style.display = 'none';
-        placeholder.style.display = 'block';
-        streamImg.src = '';
+        if (cameraStream && placeholder) {
+          cameraStream.style.display = 'none';
+          placeholder.style.display = 'block';
+          cameraStream.src = '';
+        }
         
         document.getElementById('status').textContent = 'Stopped';
         document.getElementById('status').style.color = '#FF6B6B';
-        
         isStreaming = false;
-        stopFaceDetection();
       }
       
-      function startFaceDetection() {
-        if (faceDetectionInterval) clearInterval(faceDetectionInterval);
-        
-        let lastDetectionTime = 0;
-        const detectionCooldown = 3000; // 3 giây cooldown để tránh spam
-        
-        // Face detection simulation DISABLED - waiting for real AI implementation
-        // faceDetectionInterval = setInterval(() => {
-        //   if (isStreaming) {
-        //     const now = Date.now();
-        //     // Chỉ detect nếu đã qua cooldown và random > 0.8 (giảm tần suất)
-        //     if (now - lastDetectionTime > detectionCooldown && Math.random() > 0.8) {
-        //       showFaceOverlay();
-        //       lastDetectionTime = now;
-        //       
-        //       // Tự động ẩn sau 2 giây
-        //       setTimeout(() => {
-        //         hideFaceOverlay();
-        //       }, 2000);
-        //     } else {
-        //       hideFaceOverlay();
-        //     }
-        //   }
-        // }, 1000); // Check mỗi 1 giây thay vì 2 giây
-      }
+      // ===================
+      // Modal Functions
+      // ===================
       
-      function stopFaceDetection() {
-        if (faceDetectionInterval) {
-          clearInterval(faceDetectionInterval);
-          faceDetectionInterval = null;
+      function startRegister() {
+        if (!isStreaming) {
+          document.getElementById('result').innerHTML = '<p>❌ <strong>Vui lòng kết nối server trước!</strong></p>';
+          return;
         }
-        hideFaceOverlay();
+        
+        currentMode = 'register';
+        document.getElementById('registerModal').style.display = 'block';
+        startModalCameraStream('registerCameraStream');
       }
       
-      // Real face detection function
-      function startRealFaceDetection() {
-        if (faceDetectionInterval) clearInterval(faceDetectionInterval);
+      function startCheckin() {
+        if (!isStreaming) {
+          document.getElementById('result').innerHTML = '<p>❌ <strong>Vui lòng kết nối server trước!</strong></p>';
+          return;
+        }
         
-        let lastDetectionTime = 0;
-        const detectionCooldown = 3000; // 3 giây cooldown để tránh spam
+        currentMode = 'checkin';
+        document.getElementById('checkinModal').style.display = 'block';
+        startModalCameraStream('checkinCameraStream');
+      }
+      
+      function startModalCameraStream(streamId) {
+        const modalStream = document.getElementById(streamId);
+        const streamUrl = 'http://' + window.location.hostname + ':81/stream';
+        const snapshotUrl = 'http://' + window.location.hostname + ':81/snapshot';
         
-        faceDetectionInterval = setInterval(() => {
-          if (isStreaming) {
-            const now = Date.now();
-            if (now - lastDetectionTime > detectionCooldown) {
-              detectFaceInStream();
-              lastDetectionTime = now;
+        modalStream.style.display = 'block';
+        modalStream.crossOrigin = 'anonymous'; // Allow cross-origin access
+        modalStream.src = streamUrl;
+        
+        modalStream.onerror = function() {
+          // Use snapshot fallback for modal
+          function updateModalSnapshot() {
+            if (modalStream.style.display !== 'none') {
+              const img = new Image();
+              img.crossOrigin = 'anonymous'; // Allow cross-origin access
+              img.onload = function() {
+                modalStream.src = img.src;
+              };
+              img.src = snapshotUrl + '?t=' + new Date().getTime();
             }
           }
-        }, 2000); // Check mỗi 2 giây
+          
+          updateModalSnapshot();
+          setInterval(updateModalSnapshot, 800);
+        };
       }
       
-      // Detect face in current stream frame
-      function detectFaceInStream() {
-        // Capture current stream frame
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const streamImg = document.getElementById('streamImg');
-        
-        canvas.width = streamImg.naturalWidth || 640;
-        canvas.height = streamImg.naturalHeight || 480;
-        
-        ctx.drawImage(streamImg, 0, 0);
-        
-        // Convert to blob and send to server
-        canvas.toBlob((blob) => {
-          const formData = new FormData();
-          formData.append('image', blob, 'frame.jpg');
-          
-          fetch('http://192.168.219.62:5000/detect-face', {
-            method: 'POST',
-            body: formData
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.faces && data.faces.length > 0) {
-              // Draw bounding boxes for detected faces
-              drawFaceBoxes(data.faces, canvas.width, canvas.height);
-            } else {
-              hideFaceOverlay();
-            }
-          })
-          .catch(error => {
-            console.log('Face detection error:', error);
-            hideFaceOverlay();
-          });
-        }, 'image/jpeg', 0.8);
+      function closeRegisterModal() {
+        document.getElementById('registerModal').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'none';
+        document.getElementById('registerCameraContainer').style.display = 'block';
+        capturedImageData = null;
+        currentMode = null;
       }
       
-      // Draw bounding boxes for detected faces
-      function drawFaceBoxes(faces, imgWidth, imgHeight) {
-        const overlay = document.getElementById('faceOverlay');
-        const info = document.getElementById('faceDetectionInfo');
+      function closeCheckinModal() {
+        document.getElementById('checkinModal').style.display = 'none';
+        capturedImageData = null;
+        currentMode = null;
+      }
+      
+      // ===================
+      // Capture Functions
+      // ===================
+      
+      function captureForRegister() {
+        const modalStream = document.getElementById('registerCameraStream');
+        captureImage(modalStream, function(imageData) {
+          capturedImageData = imageData;
+          document.getElementById('registerCameraContainer').style.display = 'none';
+          document.getElementById('registerForm').style.display = 'block';
+        });
+      }
+      
+      function captureForCheckin() {
+        const modalStream = document.getElementById('checkinCameraStream');
+        captureImage(modalStream, function(imageData) {
+          capturedImageData = imageData;
+          // Immediately process checkin
+          processCheckin(imageData);
+        });
+      }
+      
+      function captureImage(streamElement, callback) {
+        if (!streamElement || !streamElement.src) {
+          alert('Camera stream không sẵn sàng!');
+          return;
+        }
         
-        if (faces.length > 0) {
-          const face = faces[0]; // Use first detected face
+        try {
+          // Create canvas to capture current frame
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
           
-          // Convert server coordinates to display coordinates
-          const containerWidth = 300; // Camera container width
-          const containerHeight = 300; // Camera container height
+          // Set higher resolution for better face detection
+          canvas.width = 640;  // Fixed width for consistency
+          canvas.height = 480; // Fixed height for consistency
           
-          const scaleX = containerWidth / imgWidth;
-          const scaleY = containerHeight / imgHeight;
+          // Draw image to canvas with better quality
+          ctx.drawImage(streamElement, 0, 0, canvas.width, canvas.height);
           
-          const x = face.x * scaleX;
-          const y = face.y * scaleY;
-          const width = face.width * scaleX;
-          const height = face.height * scaleY;
+          // Check image quality by analyzing brightness
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          let totalBrightness = 0;
           
-          overlay.style.left = x + 'px';
-          overlay.style.top = y + 'px';
-          overlay.style.width = width + 'px';
-          overlay.style.height = height + 'px';
-          overlay.style.display = 'block';
+          // Sample every 10th pixel for performance
+          for (let i = 0; i < data.length; i += 40) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            totalBrightness += (r + g + b) / 3;
+          }
           
-          info.style.display = 'block';
-          info.textContent = `Khuôn mặt được phát hiện (${faces.length})`;
+          const avgBrightness = totalBrightness / (data.length / 40);
+          console.log('Image brightness:', avgBrightness);
           
-          // Auto hide after 2 seconds
-          setTimeout(() => {
-            hideFaceOverlay();
-          }, 2000);
-        } else {
-          hideFaceOverlay();
+          // Warn if image is too dark or too bright
+          if (avgBrightness < 50) {
+            alert('⚠️ Ảnh quá tối! Vui lòng chụp lại với ánh sáng tốt hơn.');
+            return;
+          } else if (avgBrightness > 200) {
+            alert('⚠️ Ảnh quá sáng! Vui lòng chụp lại với ánh sáng vừa phải.');
+            return;
+          }
+          
+          // Convert to base64 with high quality
+          const base64Data = canvas.toDataURL('image/jpeg', 0.9);
+          console.log('Image captured successfully, size:', base64Data.length);
+          callback(base64Data);
+        } catch (error) {
+          console.error('Canvas capture error:', error);
+          alert('Lỗi khi chụp ảnh: ' + error.message + '\\n\\nVui lòng thử lại hoặc refresh trang.');
         }
       }
       
-      // Manual face detection test function
-      function testFaceDetection() {
-        console.log('Testing face detection...');
-        detectFaceInStream();
+      function retakePhoto() {
+        if (currentMode === 'register') {
+          document.getElementById('registerForm').style.display = 'none';
+          document.getElementById('registerCameraContainer').style.display = 'block';
+        }
+        capturedImageData = null;
       }
       
-      function showFaceOverlay() {
-        const overlay = document.getElementById('faceOverlay');
-        const info = document.getElementById('faceDetectionInfo');
+      // ===================
+      // Submit Functions
+      // ===================
+      
+      function submitRegister() {
+        const name = document.getElementById('registerName').value.trim();
+        const studentCode = document.getElementById('registerStudentCode').value.trim();
         
-        // Vị trí cố định ở giữa màn hình thay vì random
-        const containerWidth = 300; // Width của camera container
-        const containerHeight = 300; // Height của camera container
+        if (!name || !studentCode) {
+          alert('Vui lòng nhập đầy đủ thông tin!');
+          return;
+        }
         
-        // Tính toán vị trí trung tâm
-        const faceWidth = 120; // Kích thước cố định cho khung mặt
-        const faceHeight = 120;
-        const x = (containerWidth - faceWidth) / 2;
-        const y = (containerHeight - faceHeight) / 2;
+        if (!capturedImageData) {
+          alert('Vui lòng chụp ảnh trước!');
+          return;
+        }
         
-        overlay.style.left = x + 'px';
-        overlay.style.top = y + 'px';
-        overlay.style.width = faceWidth + 'px';
-        overlay.style.height = faceHeight + 'px';
-        overlay.style.display = 'block';
+        // Convert base64 to blob
+        const base64Data = capturedImageData.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {type: 'image/jpeg'});
         
-        info.style.display = 'block';
+        // Send to server
+        const formData = new FormData();
+        formData.append('file', blob, 'register.jpg');
+        formData.append('name', name);
+        formData.append('student_code', studentCode);
         
-        // Hide after 1 second
-        setTimeout(() => {
-          hideFaceOverlay();
-        }, 1000);
+        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang đăng ký...</p>';
+        
+        fetch('http://192.168.219.62:8000/api/v1/register', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => {
+          console.log('Response status:', response.status);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Register response:', data);
+          if (data.success) {
+            document.getElementById('result').innerHTML = 
+              '<p>✅ <strong>Đăng ký thành công!</strong><br>' +
+              'Tên: ' + data.user.name + '<br>' +
+              'Mã SV: ' + data.user.student_code + '<br>' +
+              'ID: ' + data.user.user_id + '</p>';
+            
+            // Show captured image
+            showCapturedImage(capturedImageData);
+            closeRegisterModal();
+          } else {
+            document.getElementById('result').innerHTML = 
+              '<p>❌ <strong>Đăng ký thất bại:</strong> ' + data.message + '</p>';
+          }
+        })
+        .catch(error => {
+          console.error('Register error:', error);
+          document.getElementById('result').innerHTML = 
+            '<p>❌ <strong>Lỗi:</strong> ' + error.message + '</p>';
+        });
       }
       
-      function hideFaceOverlay() {
-        document.getElementById('faceOverlay').style.display = 'none';
-        document.getElementById('faceDetectionInfo').style.display = 'none';
+      function processCheckin(imageData) {
+        // Convert base64 to blob
+        const base64Data = imageData.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {type: 'image/jpeg'});
+        
+        // Send to server
+        const formData = new FormData();
+        formData.append('file', blob, 'checkin.jpg');
+        
+        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang xử lý điểm danh...</p>';
+        
+        fetch('http://192.168.219.62:8000/api/v1/checkin', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => {
+          console.log('Response status:', response.status);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Checkin response:', data);
+          if (data.success) {
+            document.getElementById('result').innerHTML = 
+              '<p>✅ <strong>Điểm danh thành công!</strong><br>' +
+              'Tên: ' + data.user.name + '<br>' +
+              'Mã sinh viên: ' + data.user.student_code + '<br>' +
+              'Độ tin cậy: ' + (data.confidence * 100).toFixed(1) + '%<br>' +
+              'Thời gian: ' + new Date().toLocaleString() + '</p>';
+            
+            // Show captured image
+            showCapturedImage(imageData);
+            closeCheckinModal();
+          } else {
+            document.getElementById('result').innerHTML = 
+              '<p>❌ <strong>Điểm danh thất bại!</strong><br>' + data.message + '</p>';
+          }
+        })
+        .catch(error => {
+          console.error('Checkin error:', error);
+          document.getElementById('result').innerHTML = 
+            '<p>❌ <strong>Lỗi:</strong> ' + error.message + '</p>';
+        });
       }
+      
+      // ===================
+      // Utility Functions
+      // ===================
       
       function showCapturedImage(imageData) {
         const container = document.getElementById('capturedImageContainer');
         const img = document.getElementById('capturedImage');
         
-        img.src = 'data:image/jpeg;base64,' + imageData;
+        img.src = imageData;
         container.style.display = 'block';
         
         // Auto hide after 10 seconds
         setTimeout(() => {
           container.style.display = 'none';
         }, 10000);
-      }
-      
-      function checkin() {
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang xử lý check-in...</p>';
-        
-        // Capture current frame for display and checkin
-        const streamImg = document.getElementById('streamImg');
-        if (streamImg.src) {
-          // Create canvas to capture current frame
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = streamImg.naturalWidth || 640;
-          canvas.height = streamImg.naturalHeight || 480;
-          ctx.drawImage(streamImg, 0, 0);
-          
-          // Send to server for checkin
-          canvas.toBlob((blob) => {
-            const formData = new FormData();
-            formData.append('image', blob, 'checkin.jpg');
-            
-            fetch('http://192.168.219.62:5000/checkin', {
-              method: 'POST',
-              body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success) {
-                document.getElementById('result').innerHTML = 
-                  '<p>✅ <strong>Check-in thành công!</strong><br>' +
-                  'Tên: ' + data.user.name + '<br>' +
-                  'Mã sinh viên: ' + data.user.student_code + '<br>' +
-                  'Độ tin cậy: ' + (data.confidence * 100).toFixed(1) + '%<br>' +
-                  'Thời gian: ' + new Date().toLocaleString() + '</p>';
-                
-                // Show captured image
-                showCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
-              } else {
-                document.getElementById('result').innerHTML = 
-                  '<p>❌ <strong>Check-in thất bại!</strong><br>' + data.message + '</p>';
-              }
-            })
-            .catch(error => {
-              document.getElementById('result').innerHTML = 
-                '<p>❌ <strong>Lỗi:</strong> ' + error + '</p>';
-            });
-          }, 'image/jpeg', 0.8);
-        }
-      }
-      
-      function register() {
-        const name = prompt('Nhập tên của bạn:');
-        const studentCode = prompt('Nhập mã sinh viên:');
-        if (name && studentCode) {
-          document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang xử lý đăng ký...</p>';
-          
-          // Capture current frame for display and registration
-          const streamImg = document.getElementById('streamImg');
-          if (streamImg.src) {
-            // Create canvas to capture current frame
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = streamImg.naturalWidth || 640;
-            canvas.height = streamImg.naturalHeight || 480;
-            ctx.drawImage(streamImg, 0, 0);
-            
-            // Send to server for registration
-            canvas.toBlob((blob) => {
-              const formData = new FormData();
-              formData.append('image', blob, 'register.jpg');
-              formData.append('name', name);
-              formData.append('student_code', studentCode);
-              
-              fetch('http://192.168.219.62:5000/register', {
-                method: 'POST',
-                body: formData
-              })
-              .then(response => response.json())
-              .then(data => {
-                if (data.success) {
-                  document.getElementById('result').innerHTML = 
-                    '<p>✅ <strong>Đăng ký thành công!</strong><br>' +
-                    'Tên: ' + data.user.name + '<br>' +
-                    'Mã SV: ' + data.user.student_code + '<br>' +
-                    'ID: ' + data.user.user_id + '</p>';
-                  
-                  // Show captured image
-                  showCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
-                } else {
-                  document.getElementById('result').innerHTML = 
-                    '<p>❌ <strong>Đăng ký thất bại:</strong> ' + data.message + '</p>';
-                }
-              })
-              .catch(error => {
-                document.getElementById('result').innerHTML = 
-                  '<p>❌ <strong>Lỗi:</strong> ' + error + '</p>';
-              });
-            }, 'image/jpeg', 0.8);
-          }
-        }
-      } 
-                '<p>✅ <strong>Đăng ký thành công!</strong><br>' +
-                'ID người dùng: ' + data.user_id + '<br>' +
-                'Tên: ' + name + '<br>' +
-                'Mã sinh viên: ' + studentCode + '</p>';
-            } else {
-              document.getElementById('result').innerHTML = 
-                '<p>❌ <strong>Đăng ký thất bại!</strong><br>' + data.error + '</p>';
-            }
-          })
-          .catch(error => {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Lỗi:</strong> ' + error + '</p>';
-          });
-        }
       }
       
       function testConnection() {
@@ -1001,35 +1149,26 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
       }
       
       function testStream() {
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang test stream...</p>';
-        const streamUrl = 'http://' + window.location.hostname + ':81/stream';
+        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang test camera...</p>';
         const snapshotUrl = 'http://' + window.location.hostname + ':81/snapshot';
-        console.log('Testing stream URL:', streamUrl);
-        console.log('Testing snapshot URL:', snapshotUrl);
         
-        // Test snapshot first (simpler)
         fetch(snapshotUrl, {method: 'GET'})
           .then(response => {
             if (response.ok) {
               document.getElementById('result').innerHTML = 
                 '<p>✅ <strong>Camera hoạt động!</strong><br>' +
-                'Snapshot URL: ' + snapshotUrl + '<br>' +
                 'Status: ' + response.status + '<br>' +
-                'Content-Type: ' + response.headers.get('content-type') + '<br><br>' +
-                'Stream URL: ' + streamUrl + '<br>' +
-                'Có thể stream sẽ hoạt động!</p>';
+                'Content-Type: ' + response.headers.get('content-type') + '</p>';
             } else {
               document.getElementById('result').innerHTML = 
                 '<p>❌ <strong>Camera lỗi!</strong><br>' +
-                'Status: ' + response.status + '<br>' +
-                'URL: ' + snapshotUrl + '</p>';
+                'Status: ' + response.status + '</p>';
             }
           })
           .catch(error => {
             document.getElementById('result').innerHTML = 
               '<p>❌ <strong>Camera không kết nối được!</strong><br>' +
-              'Lỗi: ' + error + '<br>' +
-              'URL: ' + snapshotUrl + '</p>';
+              'Lỗi: ' + error + '</p>';
           });
       }
       
@@ -1056,39 +1195,6 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
           });
       }
       
-      function toggleAutoDetection() {
-        const button = document.getElementById('autoBtn');
-        const isEnabled = button.textContent.includes('Disable');
-        
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> ' + (isEnabled ? 'Đang tắt' : 'Đang bật') + ' tự động phát hiện...</p>';
-        
-        fetch('/auto-detection', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({enabled: !isEnabled})
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            button.textContent = data.auto_detection_enabled ? '🤖 Tắt Tự động phát hiện' : '🤖 Bật Tự động phát hiện';
-            button.style.background = data.auto_detection_enabled ? 
-              'linear-gradient(45deg, #FF6B6B, #4ECDC4)' : 
-              'linear-gradient(45deg, #4ECDC4, #45B7D1)';
-            
-            document.getElementById('result').innerHTML = 
-              '<p>✅ <strong>' + data.message + '</strong><br>' +
-              'Tự động phát hiện: ' + (data.auto_detection_enabled ? '🟢 BẬT' : '🔴 TẮT') + '</p>';
-          } else {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Lỗi:</strong> ' + data.error + '</p>';
-          }
-        })
-        .catch(error => {
-          document.getElementById('result').innerHTML = 
-            '<p>❌ <strong>Lỗi:</strong> ' + error + '</p>';
-        });
-      }
-      
       function getStatus() {
         document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang lấy trạng thái hệ thống...</p>';
         fetch('/status', {method: 'GET'})
@@ -1101,8 +1207,6 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             
             document.getElementById('result').innerHTML = 
               '<p>📊 <strong>Trạng thái hệ thống:</strong><br>' +
-              'Tự động phát hiện: ' + (data.auto_detection_enabled ? '🟢 BẬT' : '🔴 TẮT') + '<br>' +
-              'Khuôn mặt phát hiện: ' + (data.face_currently_detected ? '🟢 CÓ' : '🔴 KHÔNG') + '<br>' +
               'WiFi: ' + (data.wifi_connected ? '🟢 Đã kết nối' : '🔴 Mất kết nối') + '<br>' +
               'IP: ' + data.wifi_ip + '<br>' +
               'Server: ' + data.server_url + '<br>' +
@@ -1114,8 +1218,18 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
           });
       }
       
-      // Auto-refresh status every 30 seconds (DISABLED)
-      // setInterval(testConnection, 30000);
+      // Close modals when clicking outside
+      window.onclick = function(event) {
+        const registerModal = document.getElementById('registerModal');
+        const checkinModal = document.getElementById('checkinModal');
+        
+        if (event.target === registerModal) {
+          closeRegisterModal();
+        }
+        if (event.target === checkinModal) {
+          closeCheckinModal();
+        }
+      }
     </script>
   </body>
 </html>
@@ -1132,6 +1246,15 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   size_t _jpg_buf_len = 0;
   uint8_t * _jpg_buf = NULL;
   char * part_buf[64];
+
+  // Add CORS headers to allow cross-origin access
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+  httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
+  httpd_resp_set_hdr(req, "Cross-Origin-Embedder-Policy", "unsafe-none");
+  httpd_resp_set_hdr(req, "Cross-Origin-Opener-Policy", "unsafe-none");
+  httpd_resp_set_hdr(req, "Cross-Origin-Resource-Policy", "cross-origin");
 
   res = httpd_resp_set_type(req, "multipart/x-mixed-replace;boundary=123456789000000000000987654321");
   if(res != ESP_OK){
@@ -1196,11 +1319,14 @@ static esp_err_t snapshot_handler(httpd_req_t *req) {
     return ESP_FAIL;
   }
   
-  // Add CORS headers
+  // Add CORS headers to allow cross-origin access
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
   httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
+  httpd_resp_set_hdr(req, "Cross-Origin-Embedder-Policy", "unsafe-none");
+  httpd_resp_set_hdr(req, "Cross-Origin-Opener-Policy", "unsafe-none");
+  httpd_resp_set_hdr(req, "Cross-Origin-Resource-Policy", "cross-origin");
   
   res = httpd_resp_set_type(req, "image/jpeg");
   if(res != ESP_OK){
@@ -1250,7 +1376,7 @@ static esp_err_t checkin_handler(httpd_req_t *req) {
   esp_camera_fb_return(fb);
 
   HTTPClient http;
-  http.begin(serverUrl + String("/checkin"));
+  http.begin(serverUrl + String("/api/v1/checkin"));
   http.addHeader("Content-Type", "application/json");
   
   String jsonData = "{\"image\":\"" + imageData + "\"}";
@@ -1342,7 +1468,7 @@ static esp_err_t register_handler(httpd_req_t *req) {
   esp_camera_fb_return(fb);
 
   HTTPClient http;
-  http.begin(serverUrl + String("/register"));
+  http.begin(serverUrl + String("/api/v1/register"));
   http.addHeader("Content-Type", "application/json");
   
   String jsonData = "{\"name\":\"" + name + "\",\"student_code\":\"" + studentCode + "\",\"image\":\"" + imageData + "\"}";
@@ -1398,7 +1524,7 @@ static esp_err_t register_handler(httpd_req_t *req) {
 
 static esp_err_t test_connection_handler(httpd_req_t *req) {
   HTTPClient http;
-  http.begin(serverUrl + String("/health"));
+  http.begin(serverUrl + String("/api/v1/health"));
   int httpResponseCode = http.GET();
   
   DynamicJsonDocument responseDoc(512);
@@ -1416,7 +1542,7 @@ static esp_err_t test_connection_handler(httpd_req_t *req) {
 
 static esp_err_t users_handler(httpd_req_t *req) {
   HTTPClient http;
-  http.begin(serverUrl + String("/users"));
+  http.begin(serverUrl + String("/api/v1/users"));
   int httpResponseCode = http.GET();
   
   String response = http.getString();
