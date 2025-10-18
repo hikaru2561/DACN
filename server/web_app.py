@@ -319,6 +319,15 @@ def show_attendance_logs():
         df = pd.DataFrame(logs)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         
+        # Flatten user object into separate columns
+        if 'user' in df.columns:
+            df['user_name'] = df['user'].apply(lambda x: x.get('name', 'Unknown') if isinstance(x, dict) else 'Unknown')
+            df['student_code'] = df['user'].apply(lambda x: x.get('student_code', 'Unknown') if isinstance(x, dict) else 'Unknown')
+        else:
+            # If no user object, create placeholder columns
+            df['user_name'] = 'Unknown'
+            df['student_code'] = 'Unknown'
+        
         # Summary stats
         st.subheader("📈 Summary")
         col1, col2, col3, col4 = st.columns(4)
@@ -334,9 +343,19 @@ def show_attendance_logs():
         
         # Data table
         st.subheader("📋 Detailed Logs")
+        display_columns = ['user_name', 'student_code', 'timestamp', 'confidence', 'device_id']
+        available_columns = [col for col in display_columns if col in df.columns]
+        
         st.dataframe(
-            df[['user', 'timestamp', 'confidence', 'device_id']],
-            use_container_width=True
+            df[available_columns],
+            use_container_width=True,
+            column_config={
+                "user_name": "Tên",
+                "student_code": "Mã sinh viên", 
+                "timestamp": "Thời gian",
+                "confidence": "Độ tin cậy",
+                "device_id": "Thiết bị"
+            }
         )
         
         # Export option

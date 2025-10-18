@@ -51,6 +51,7 @@ class RecognitionResponse(BaseModel):
 class AttendanceResponse(BaseModel):
     id: int
     user_id: int
+    user: Optional[Dict] = None  # Add user object field
     timestamp: datetime
     confidence: Optional[float] = None
     device_id: Optional[str] = None
