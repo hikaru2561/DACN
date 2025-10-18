@@ -12,6 +12,8 @@ ESP32-CAM với giao diện web hiện đại cho hệ thống nhận dạng khu
 - 🔗 **API integration** với Python backend
 - 📱 **Responsive design** cho mobile và desktop
 - ⚡ **Fast processing** với optimized algorithms
+- 🚀 **Auto processing** điểm danh sau khi chụp ảnh
+- 🎯 **Optimized code** loại bỏ OLED và loa
 
 ## 🛠️ Phần cứng
 
@@ -22,8 +24,8 @@ ESP32-CAM với giao diện web hiện đại cho hệ thống nhận dạng khu
 
 ### Optional:
 - MicroSD card
-- OLED display (SSD1306)
-- Speaker + PAM8403
+
+**Note**: OLED display và Speaker đã được loại bỏ để tối ưu hóa hệ thống
 
 ## 📦 Cài đặt
 

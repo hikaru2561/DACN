@@ -1,18 +1,15 @@
 /*
  * Hệ thống Điểm danh bằng Nhận dạng Khuôn mặt
- * ESP32-CAM + OLED SSD1306 + Speaker + PAM8403
+ * ESP32-CAM Web Interface
  * 
  * Tính năng:
  * - Chụp ảnh khuôn mặt và gửi lên server Python
- * - Hiển thị kết quả trên OLED 128x64
- * - Phát âm thanh thông báo tiếng Việt qua Speaker
  * - Web interface để quản lý và đăng ký
  * - Kết nối WiFi và HTTP API
+ * - Camera streaming và snapshot
  * 
  * Phần cứng:
- * - ESP32-CAM
- * - OLED SSD1306 128x64 (I2C: SDA=GPIO21, SCL=GPIO22)
- * - Speaker + PAM8403 (I2S: DIN=GPIO25, BCLK=GPIO26, LRC=GPIO27)
+ * - ESP32-CAM AI-Thinker
  * 
  * Tác giả: [Tên sinh viên]
  * Ngày: 2024
@@ -63,83 +60,24 @@
 #else
   #error "Camera model not selected"
 #endif
-// #include <Wire.h>
-// #include <Adafruit_GFX.h>
-// #include <Adafruit_SSD1306.h>
-// #include <Audio.h>
 
 // ===================
 // WiFi Configuration
 // ===================
-const char* ssid = "K9";           // Thay đổi SSID WiFi của bạn
+const char* ssid = "K09";           // Thay đổi SSID WiFi của bạn
 const char* password = "nk111111";   // Thay đổi password WiFi của bạn
 
 // ===================
 // Server Configuration
 // ===================
-const char* serverUrl = "http://192.168.219.62:8000"; // Thay đổi IP của máy chủ Python (thay đổi IP này thành IP máy tính của bạn)
+const char* serverUrl = "http://192.168.216.62:8000"; // Thay đổi IP của máy chủ Python (thay đổi IP này thành IP máy tính của bạn)
 
-// ===================
-// Camera Configuration
-// ===================
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
-
-// ===================
-// OLED Configuration (COMMENTED FOR TESTING)
-// ===================
-// #define SCREEN_WIDTH 128
-// #define SCREEN_HEIGHT 64
-// #define OLED_RESET -1
-// #define SCREEN_ADDRESS 0x3C
-// Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-// ===================
-// Audio Configuration (COMMENTED FOR TESTING)
-// ===================
-// Audio audio;
-// #define I2S_DOUT_PIN 25  // Data Out (SD)
-// #define I2S_BCLK_PIN 26  // Bit Clock (SCK)
-// #define I2S_LRC_PIN 27   // Left/Right Clock (WS)
-
-// ===================
-// Button Configuration (COMMENTED FOR TESTING)
-// ===================
-// #define BUTTON_PIN 4     // Nút điểm danh
-// #define FLASH_PIN 2      // Nút đăng ký
 
 // ===================
 // Global Variables
 // ===================
 httpd_handle_t stream_httpd = NULL;
 httpd_handle_t camera_httpd = NULL;
-bool isStreaming = false;
-unsigned long lastButtonPress = 0;
-const unsigned long debounceDelay = 200;
-
-// ===================
-// Auto Face Detection Variables
-// ===================
-bool autoDetectionEnabled = false;
-unsigned long faceDetectedTime = 0;
-bool faceCurrentlyDetected = false;
-const unsigned long faceDetectionDelay = 2500; // 2.5 seconds
-unsigned long lastAutoCapture = 0;
-const unsigned long autoCaptureCooldown = 5000; // 5 seconds cooldown
 
 // ===================
 // Base64 Encoding Function
@@ -190,128 +128,6 @@ String base64_encode(uint8_t* data, size_t length) {
   return result;
 }
 
-// ===================
-// Text-to-Speech Function (COMMENTED FOR TESTING)
-// ===================
-/*
-void playTTS(String text) {
-  // Sử dụng Google Translate TTS (miễn phí)
-  String url = "http://translate.google.com/translate_tts?ie=UTF-8&q=" + text + "&tl=vi&client=tw-ob";
-  
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Playing TTS...");
-  display.display();
-  
-  audio.connecttohost(url.c_str());
-  
-  // Chờ audio phát xong
-  while (audio.isRunning()) {
-    audio.loop();
-    delay(10);
-  }
-  
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("TTS Complete");
-  display.display();
-  delay(1000);
-}
-*/
-
-// ===================
-// Simple Face Detection Function
-// ===================
-bool detectFaceInFrame(camera_fb_t * fb) {
-  // Simple face detection based on image characteristics
-  // This is a basic implementation - in real scenario, you'd use OpenCV or similar
-  
-  if (!fb || fb->len < 1000) return false;
-  
-  // Simple heuristic: check if image has enough contrast and brightness
-  // This is a placeholder - real face detection would be more sophisticated
-  uint8_t* buf = fb->buf;
-  int totalPixels = fb->len;
-  int brightPixels = 0;
-  int darkPixels = 0;
-  
-  for (int i = 0; i < totalPixels; i += 10) { // Sample every 10th pixel
-    if (buf[i] > 150) brightPixels++;
-    else if (buf[i] < 100) darkPixels++;
-  }
-  
-  // If we have good contrast (both bright and dark areas), assume face is present
-  float contrast = (float)(brightPixels + darkPixels) / (totalPixels / 10);
-  return contrast > 0.3; // Threshold for face detection
-}
-
-// ===================
-// Auto Capture Function (COMMENTED FOR TESTING)
-// ===================
-/*
-void performAutoCapture() {
-  if (millis() - lastAutoCapture < autoCaptureCooldown) {
-    return; // Still in cooldown period
-  }
-  
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Auto capturing...");
-  display.display();
-  
-  camera_fb_t * fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Auto capture failed - camera error");
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Camera error!");
-    display.display();
-    return;
-  }
-
-  String imageData = base64_encode(fb->buf, fb->len);
-  esp_camera_fb_return(fb);
-
-  HTTPClient http;
-  http.begin(serverUrl + String("/api/v1/checkin"));
-  http.addHeader("Content-Type", "application/json");
-  
-  String jsonData = "{\"image\":\"" + imageData + "\"}";
-  int httpResponseCode = http.POST(jsonData);
-  
-  String response = http.getString();
-  http.end();
-
-  DynamicJsonDocument responseDoc(1024);
-  deserializeJson(responseDoc, response);
-
-  lastAutoCapture = millis();
-
-  if (responseDoc["success"]) {
-    String userName = responseDoc["user"]["name"];
-    float confidence = responseDoc["user"]["confidence"];
-    
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Auto Check-in!");
-    display.println("Name: " + userName);
-    display.print("Conf: ");
-    display.println(confidence);
-    display.display();
-    
-    String message = "Tự động điểm danh thành công với người dùng " + userName;
-    playTTS(message);
-  } else {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Auto Check-in");
-    display.println("Failed!");
-    display.display();
-    
-    playTTS("Tự động điểm danh thất bại. Khuôn mặt không được nhận diện.");
-  }
-}
-*/
 
 // ===================
 // HTTP Server Handlers
@@ -335,118 +151,326 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             text-align: center; 
             margin: 0;
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4c93 100%);
+            background-attachment: fixed;
             color: white;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         .container { 
-            max-width: 1200px; 
+            max-width: 1400px; 
             margin: 0 auto; 
             background: rgba(255,255,255,0.1);
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 20px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            box-shadow: 0 10px 25px 0 rgba(31, 38, 135, 0.3);
+            border: 1px solid rgba(255,255,255,0.15);
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .title {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            color: #E6B800;
+            font-weight: 600;
         }
         
         .subtitle {
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            opacity: 0.9;
+            font-size: 1.3em;
+            margin-bottom: 40px;
+            opacity: 0.95;
+            font-weight: 300;
+            letter-spacing: 1px;
         }
         
         .dashboard {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-top: 20px;
+            gap: 40px;
+            margin-top: 30px;
+            align-items: start;
         }
         
         .left-panel {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 25px;
         }
         
         .right-panel {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 25px;
         }
         
         .camera-container {
             position: relative;
-            background: rgba(0,0,0,0.3);
-            border-radius: 15px;
-            padding: 20px;
-            min-height: 400px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            padding: 25px;
+            min-height: 450px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            border: 2px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .camera-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
         }
         
         .camera-stream {
             max-width: 100%;
-            max-height: 400px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px 0 rgba(0,0,0,0.3);
+            max-height: 450px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px 0 rgba(0,0,0,0.4);
             display: none;
+            transition: all 0.3s ease;
+            border: 3px solid rgba(255,255,255,0.2);
+        }
+        
+        .camera-stream:hover {
+            transform: scale(1.02);
+            box-shadow: 0 12px 35px 0 rgba(0,0,0,0.5);
         }
         
         .captured-image {
             max-width: 100%;
             max-height: 200px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px 0 rgba(0,0,0,0.3);
+            border-radius: 15px;
+            box-shadow: 0 8px 25px 0 rgba(0,0,0,0.4);
             margin-top: 10px;
             display: none;
+            border: 3px solid rgba(255,255,255,0.2);
+        }
+        
+        #capturedImageContainer {
+            background: rgba(255,255,255,0.08);
+            border-radius: 15px;
+            padding: 15px;
+            margin: 0;
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        
+        #capturedImageContainer h4 {
+            margin: 0 0 10px 0;
+            color: #D4AF37;
+            font-size: 1.1em;
+            text-align: center;
+            font-weight: 500;
         }
         
         .status { 
-            margin: 20px 0; 
-            padding: 15px; 
-            background: rgba(255,255,255,0.2);
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.3);
+            margin: 0; 
+            padding: 20px; 
+            background: rgba(255,255,255,0.08);
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
         }
         
         .status h3 {
-            margin: 0 0 10px 0;
-            color: #FFD700;
+            margin: 0 0 15px 0;
+            color: #D4AF37;
+            font-size: 1.2em;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-label {
+            font-weight: 500;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .status-value {
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        
+        #result {
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            border: 2px solid rgba(255,255,255,0.1);
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        #result.success {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: rgba(76, 175, 80, 0.5);
+            color: #4CAF50;
+        }
+        
+        #result.error {
+            background: rgba(244, 67, 54, 0.2);
+            border-color: rgba(244, 67, 54, 0.5);
+            color: #f44336;
+        }
+        
+        #result.loading {
+            background: rgba(33, 150, 243, 0.2);
+            border-color: rgba(33, 150, 243, 0.5);
+            color: #2196F3;
+        }
+        
+        #result p {
+            margin: 0;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        #result strong {
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        #result small {
+            font-size: 14px;
+            opacity: 0.9;
         }
         
         .button { 
             background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
             border: none; 
             color: white; 
-            padding: 12px 24px; 
+            padding: 15px 30px; 
             text-align: center; 
             text-decoration: none; 
             display: inline-block; 
             font-size: 16px; 
-            margin: 5px; 
+            font-weight: 600;
+            margin: 8px; 
             cursor: pointer; 
-            border-radius: 25px;
+            border-radius: 30px;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px 0 rgba(31, 38, 135, 0.2);
+            box-shadow: 0 6px 20px 0 rgba(31, 38, 135, 0.3);
             width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .button:hover::before {
+            left: 100%;
         }
         
         .button:hover { 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px 0 rgba(31, 38, 135, 0.4);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 10px 30px 0 rgba(31, 38, 135, 0.5);
         }
         
         .button:active {
             transform: translateY(0);
+        }
+        
+        .camera-settings {
+            background: rgba(255,255,255,0.08);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 0;
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        
+        .camera-settings h3 {
+            margin: 0 0 20px 0;
+            color: #D4AF37;
+            font-size: 1.2em;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .setting-group {
+            margin-bottom: 15px;
+        }
+        
+        .setting-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #fff;
+        }
+        
+        .setting-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        .setting-group input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
         
         .button:disabled {
@@ -490,17 +514,106 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         
         .loading {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
+            width: 25px;
+            height: 25px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid #FFD700;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin-right: 10px;
         }
         
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            background: rgba(0,0,0,0.9);
+            border-radius: 10px;
+            padding: 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification-content {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            color: white;
+        }
+        
+        .notification-icon {
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        
+        .notification-message {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .notification-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+        
+        .notification-close:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .notification-success {
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .notification-error {
+            border-left: 4px solid #f44336;
+        }
+        
+        .notification-info {
+            border-left: 4px solid #2196F3;
         }
         
         .modal {
@@ -590,9 +703,21 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             transform: none;
         }
         
+        @media (max-width: 1200px) {
+            .container {
+                max-width: 95%;
+                padding: 20px;
+            }
+            
+            .title {
+                font-size: 2.5em;
+            }
+        }
+        
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
+                gap: 25px;
             }
             
             .button-group {
@@ -602,19 +727,82 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
             .button-group.triple {
                 grid-template-columns: 1fr;
             }
+            
+            .title {
+                font-size: 2em;
+            }
+            
+            .subtitle {
+                font-size: 1.1em;
+            }
+            
+            .camera-container {
+                min-height: 300px;
+                padding: 15px;
+            }
+            
+            .camera-stream {
+                max-height: 300px;
+            }
+            
+            .status, .camera-settings, #capturedImageContainer {
+                padding: 15px;
+            }
+            
+            .status-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            
+            .status-value {
+                align-self: flex-end;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .title {
+                font-size: 1.8em;
+            }
+            
+            .button {
+                padding: 12px 20px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="title">🎯 Face Recognition System</h1>
-        <p class="subtitle">Hệ thống Điểm danh bằng Nhận dạng Khuôn mặt</p>
+        <h1 class="title">🎯 Hệ thống Điểm danh Thông minh</h1>
+        <p class="subtitle">Face Recognition Attendance System - ESP32-CAM</p>
         
         <div class="status">
-            <h3>📊 System Status</h3>
-            <p><strong>Status:</strong> <span id="status">Ready</span></p>
-            <p><strong>Server:</strong> <span id="server">Disconnected</span></p>
-            <p><strong>WiFi:</strong> <span id="wifi">Connected</span></p>
+            <h3>📊 Trạng thái Hệ thống</h3>
+            <div class="status-item">
+                <span class="status-label">Trạng thái:</span>
+                <span class="status-value" id="status" style="background: rgba(76, 175, 80, 0.3); color: #4CAF50;">Sẵn sàng</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Server:</span>
+                <span class="status-value" id="server" style="background: rgba(255, 152, 0, 0.3); color: #FF9800;">Chưa kết nối</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">WiFi:</span>
+                <span class="status-value" id="wifi" style="background: rgba(76, 175, 80, 0.3); color: #4CAF50;">Đã kết nối</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Camera:</span>
+                <span class="status-value" id="camera-status" style="background: rgba(33, 150, 243, 0.3); color: #2196F3;">Đang khởi tạo...</span>
+            </div>
         </div>
         
         <div class="dashboard">
@@ -627,27 +815,42 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
                 </div>
                 
                 <div class="button-group">
-                    <button class="button" onclick="connectServer()">🔗 Kết nối Server</button>
+                    <button class="button" onclick="connectServer()">🔗 Kết nối Hệ thống</button>
                     <button class="button" onclick="disconnectServer()">❌ Ngắt kết nối</button>
                 </div>
                 
                 <div class="button-group">
                     <button class="button" onclick="startCheckin()">✅ Điểm danh</button>
-                    <button class="button" onclick="startRegister()">👤 Đăng ký</button>
+                    <button class="button" onclick="startRegister()">👤 Đăng ký mới</button>
                 </div>
                 
                 <div class="button-group single">
-                    <button class="button" onclick="getUsers()">👥 Xem danh sách</button>
+                    <button class="button" onclick="getUsers()">👥 Danh sách người dùng</button>
                 </div>
             </div>
             
             <div class="right-panel">
                 <div id="result"></div>
                 
-                <div class="button-group triple">
-                    <button class="button" onclick="testConnection()">🔧 Test Server</button>
-                    <button class="button" onclick="testStream()">📹 Test Camera</button>
-                    <button class="button" onclick="getStatus()">📊 Status</button>
+                
+                <div class="camera-settings">
+                    <h3>⚙️ Cài đặt Camera</h3>
+                    <div class="setting-group">
+                        <label>Độ sáng: <span id="brightnessValue">0</span></label>
+                        <input type="range" id="brightness" min="-2" max="2" value="0" onchange="updateCameraSetting('brightness', this.value)">
+                    </div>
+                    <div class="setting-group">
+                        <label>Độ tương phản: <span id="contrastValue">0</span></label>
+                        <input type="range" id="contrast" min="-2" max="2" value="0" onchange="updateCameraSetting('contrast', this.value)">
+                    </div>
+                    <div class="setting-group">
+                        <label>Độ bão hòa: <span id="saturationValue">0</span></label>
+                        <input type="range" id="saturation" min="-2" max="2" value="0" onchange="updateCameraSetting('saturation', this.value)">
+                    </div>
+                    <div class="setting-group">
+                        <label>Độ sắc nét: <span id="sharpnessValue">0</span></label>
+                        <input type="range" id="sharpness" min="-2" max="2" value="0" onchange="updateCameraSetting('sharpness', this.value)">
+                    </div>
                 </div>
                 
                 <div id="capturedImageContainer" style="display: none;">
@@ -719,33 +922,51 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
       // ===================
       
       function connectServer() {
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang kết nối server...</p>';
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'loading';
+        resultDiv.innerHTML = '<p><span class="loading"></span> Đang kiểm tra kết nối server...</p>';
         
-        // Test server connection first
-        fetch('/test-connection', {method: 'GET'})
-          .then(response => response.json())
+        // Add timeout for connection
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout - Server không phản hồi sau 10 giây')), 10000)
+        );
+        
+        const fetchPromise = fetch('/test-connection', {method: 'GET'});
+        
+        Promise.race([fetchPromise, timeoutPromise])
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+          })
           .then(data => {
             if (data.connected) {
-              // Start camera stream
-              startCameraStream();
-              document.getElementById('result').innerHTML = 
+              resultDiv.className = 'success';
+              resultDiv.innerHTML = 
                 '<p>✅ <strong>Kết nối thành công!</strong><br>' +
-                'Server: ' + data.server_url + '<br>' +
-                'Camera: Đang khởi động...</p>';
+                '<small>Server: ' + data.server_url + '</small><br>' +
+                '<span class="loading"></span> Camera: Đang khởi động...</p>';
+              
               document.getElementById('server').textContent = 'Connected';
               document.getElementById('server').style.color = '#4ECDC4';
+              
+              // Start camera stream with delay for better UX
+              setTimeout(() => {
+                startCameraStream();
+              }, 1500);
             } else {
-              document.getElementById('result').innerHTML = 
-                '<p>❌ <strong>Không thể kết nối server!</strong><br>' +
-                'URL: ' + data.server_url + '<br>' +
-                'Mã lỗi: ' + data.response_code + '</p>';
-              document.getElementById('server').textContent = 'Disconnected';
-              document.getElementById('server').style.color = '#FF6B6B';
+              throw new Error(`Server không phản hồi (Mã lỗi: ${data.response_code})`);
             }
           })
           .catch(error => {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Lỗi kết nối:</strong> ' + error + '</p>';
+            console.error('Connection error:', error);
+            resultDiv.className = 'error';
+            resultDiv.innerHTML = 
+              '<p>❌ <strong>Kết nối thất bại!</strong><br>' +
+              '<small>' + error.message + '</small><br>' +
+              '<button class="button" onclick="connectServer()" style="margin-top: 10px; width: auto; padding: 8px 16px; font-size: 14px;">🔄 Thử lại</button></p>';
+            
             document.getElementById('server').textContent = 'Error';
             document.getElementById('server').style.color = '#FF6B6B';
           });
@@ -753,7 +974,9 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
       
       function disconnectServer() {
         stopCameraStream();
-        document.getElementById('result').innerHTML = '<p>🔌 <strong>Đã ngắt kết nối server</strong></p>';
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = '';
+        resultDiv.innerHTML = '<p>🔌 <strong>Đã ngắt kết nối server</strong></p>';
         document.getElementById('server').textContent = 'Disconnected';
         document.getElementById('server').style.color = '#FF6B6B';
       }
@@ -1004,29 +1227,28 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
           return;
         }
         
-        // Convert base64 to blob
-        const base64Data = capturedImageData.split(',')[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], {type: 'image/jpeg'});
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'loading';
+        resultDiv.innerHTML = '<p><span class="loading"></span> Đang đăng ký...</p>';
         
-        // Send to server
-        const formData = new FormData();
-        formData.append('file', blob, 'register.jpg');
-        formData.append('name', name);
-        formData.append('student_code', studentCode);
+        // Send to ESP32 register endpoint (which will forward to Python server)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 second timeout
         
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang đăng ký...</p>';
-        
-        fetch('http://192.168.219.62:8000/api/v1/register', {
+        fetch('/register', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: name,
+            student_code: studentCode,
+            image: capturedImageData
+          }),
+          signal: controller.signal
         })
         .then(response => {
+          clearTimeout(timeoutId);
           console.log('Response status:', response.status);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1035,50 +1257,70 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         })
         .then(data => {
           console.log('Register response:', data);
+          const resultDiv = document.getElementById('result');
           if (data.success) {
-            document.getElementById('result').innerHTML = 
+            resultDiv.className = 'success';
+            resultDiv.innerHTML = 
               '<p>✅ <strong>Đăng ký thành công!</strong><br>' +
-              'Tên: ' + data.user.name + '<br>' +
+              '<small>Tên: ' + data.user.name + '<br>' +
               'Mã SV: ' + data.user.student_code + '<br>' +
-              'ID: ' + data.user.user_id + '</p>';
+              'ID: ' + data.user.user_id + '</small></p>';
             
             // Show captured image
             showCapturedImage(capturedImageData);
             closeRegisterModal();
           } else {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Đăng ký thất bại:</strong> ' + data.message + '</p>';
+            resultDiv.className = 'error';
+            resultDiv.innerHTML = 
+              '<p>❌ <strong>Đăng ký thất bại:</strong><br><small>' + data.message + '</small></p>';
           }
         })
         .catch(error => {
           console.error('Register error:', error);
-          document.getElementById('result').innerHTML = 
-            '<p>❌ <strong>Lỗi:</strong> ' + error.message + '</p>';
+          let errorMessage = 'Lỗi không xác định';
+          
+          if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng và thử lại.';
+          } else if (error.message.includes('timeout')) {
+            errorMessage = 'Request timeout. Server đang xử lý quá lâu, vui lòng thử lại.';
+          } else if (error.message.includes('HTTP 500')) {
+            errorMessage = 'Lỗi server. Vui lòng thử lại sau.';
+          } else if (error.message.includes('HTTP 400')) {
+            errorMessage = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra thông tin và thử lại.';
+          } else {
+            errorMessage = error.message;
+          }
+          
+          const resultDiv = document.getElementById('result');
+          resultDiv.className = 'error';
+          resultDiv.innerHTML = 
+            '<p>❌ <strong>Lỗi đăng ký:</strong><br>' +
+            '<small>' + errorMessage + '</small><br>' +
+            '<button class="button" onclick="startRegister()" style="margin-top: 10px; width: auto; padding: 8px 16px; font-size: 14px;">🔄 Thử lại</button></p>';
         });
       }
       
       function processCheckin(imageData) {
-        // Convert base64 to blob
-        const base64Data = imageData.split(',')[1];
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], {type: 'image/jpeg'});
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'loading';
+        resultDiv.innerHTML = '<p><span class="loading"></span> Đang xử lý điểm danh...</p>';
         
-        // Send to server
-        const formData = new FormData();
-        formData.append('file', blob, 'checkin.jpg');
+        // Send to ESP32 checkin endpoint (which will forward to Python server)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 second timeout
         
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang xử lý điểm danh...</p>';
-        
-        fetch('http://192.168.219.62:8000/api/v1/checkin', {
+        fetch('/checkin', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: imageData
+          }),
+          signal: controller.signal
         })
         .then(response => {
+          clearTimeout(timeoutId);
           console.log('Response status:', response.status);
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1087,26 +1329,47 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         })
         .then(data => {
           console.log('Checkin response:', data);
+          const resultDiv = document.getElementById('result');
           if (data.success) {
-            document.getElementById('result').innerHTML = 
+            resultDiv.className = 'success';
+            resultDiv.innerHTML = 
               '<p>✅ <strong>Điểm danh thành công!</strong><br>' +
-              'Tên: ' + data.user.name + '<br>' +
+              '<small>Tên: ' + data.user.name + '<br>' +
               'Mã sinh viên: ' + data.user.student_code + '<br>' +
               'Độ tin cậy: ' + (data.confidence * 100).toFixed(1) + '%<br>' +
-              'Thời gian: ' + new Date().toLocaleString() + '</p>';
+              'Thời gian: ' + new Date().toLocaleString() + '</small></p>';
             
             // Show captured image
             showCapturedImage(imageData);
             closeCheckinModal();
           } else {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Điểm danh thất bại!</strong><br>' + data.message + '</p>';
+            resultDiv.className = 'error';
+            resultDiv.innerHTML = 
+              '<p>❌ <strong>Điểm danh thất bại!</strong><br><small>' + data.message + '</small></p>';
           }
         })
         .catch(error => {
           console.error('Checkin error:', error);
-          document.getElementById('result').innerHTML = 
-            '<p>❌ <strong>Lỗi:</strong> ' + error.message + '</p>';
+          let errorMessage = 'Lỗi không xác định';
+          
+          if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng và thử lại.';
+          } else if (error.message.includes('timeout')) {
+            errorMessage = 'Request timeout. Server đang xử lý quá lâu, vui lòng thử lại.';
+          } else if (error.message.includes('HTTP 500')) {
+            errorMessage = 'Lỗi server. Vui lòng thử lại sau.';
+          } else if (error.message.includes('HTTP 400')) {
+            errorMessage = 'Dữ liệu không hợp lệ. Vui lòng chụp ảnh rõ nét hơn.';
+          } else {
+            errorMessage = error.message;
+          }
+          
+          const resultDiv = document.getElementById('result');
+          resultDiv.className = 'error';
+          resultDiv.innerHTML = 
+            '<p>❌ <strong>Lỗi điểm danh:</strong><br>' +
+            '<small>' + errorMessage + '</small><br>' +
+            '<button class="button" onclick="startCheckin()" style="margin-top: 10px; width: auto; padding: 8px 16px; font-size: 14px;">🔄 Thử lại</button></p>';
         });
       }
       
@@ -1125,6 +1388,65 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
         setTimeout(() => {
           container.style.display = 'none';
         }, 10000);
+      }
+      
+      function updateCameraSetting(setting, value) {
+        // Update the display value
+        document.getElementById(setting + 'Value').textContent = value;
+        
+        // Send setting to ESP32
+        fetch('/camera-setting', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            setting: setting,
+            value: parseInt(value)
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log(`Camera ${setting} updated to ${value}`);
+            showNotification(`Cài đặt ${setting} đã được cập nhật thành công!`, 'success');
+          } else {
+            console.error('Failed to update camera setting:', data.error);
+            showNotification(`Lỗi cập nhật ${setting}: ${data.error}`, 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error updating camera setting:', error);
+          showNotification(`Lỗi kết nối khi cập nhật ${setting}`, 'error');
+        });
+      }
+      
+      function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+          <div class="notification-content">
+            <span class="notification-icon">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
+            <span class="notification-message">${message}</span>
+            <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+          </div>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+          if (notification.parentElement) {
+            notification.remove();
+          }
+        }, 5000);
+        
+        // Add animation
+        setTimeout(() => {
+          notification.classList.add('show');
+        }, 100);
       }
       
       function testConnection() {
@@ -1173,25 +1495,37 @@ static const char* PROGMEM INDEX_HTML = R"rawliteral(
       }
       
       function getUsers() {
-        document.getElementById('result').innerHTML = '<p><span class="loading"></span> Đang tải danh sách người dùng...</p>';
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = 'loading';
+        resultDiv.innerHTML = '<p><span class="loading"></span> Đang tải danh sách người dùng...</p>';
+        
         fetch('/users', {method: 'GET'})
-          .then(response => response.json())
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+          })
           .then(data => {
-            if (data.success) {
+            console.log('Users response:', data);
+            resultDiv.className = 'success';
+            
+            if (data && data.length > 0) {
               let usersHtml = '<p>👥 <strong>Danh sách người dùng:</strong><br>';
-              data.data.forEach(user => {
-                usersHtml += '• ' + user.name + ' (' + user.student_code + ')<br>';
+              data.forEach(user => {
+                usersHtml += '<small>• ' + user.name + ' (' + user.student_code + ')<br></small>';
               });
-              usersHtml += '<br>Tổng cộng: ' + data.count + ' người dùng</p>';
-              document.getElementById('result').innerHTML = usersHtml;
+              usersHtml += '<br><small>Tổng cộng: ' + data.length + ' người dùng</small></p>';
+              resultDiv.innerHTML = usersHtml;
             } else {
-              document.getElementById('result').innerHTML = 
-                '<p>❌ <strong>Lỗi:</strong> ' + data.error + '</p>';
+              resultDiv.innerHTML = '<p>👥 <strong>Danh sách người dùng:</strong><br><small>Chưa có người dùng nào được đăng ký</small></p>';
             }
           })
           .catch(error => {
-            document.getElementById('result').innerHTML = 
-              '<p>❌ <strong>Lỗi:</strong> ' + error + '</p>';
+            console.error('Users error:', error);
+            resultDiv.className = 'error';
+            resultDiv.innerHTML = 
+              '<p>❌ <strong>Lỗi tải danh sách:</strong><br><small>' + error.message + '</small></p>';
           });
       }
       
@@ -1372,17 +1706,37 @@ static esp_err_t checkin_handler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  String imageData = base64_encode(fb->buf, fb->len);
-  esp_camera_fb_return(fb);
-
   HTTPClient http;
   http.begin(serverUrl + String("/api/v1/checkin"));
-  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(30000); // 30 second timeout
+  http.setConnectTimeout(10000); // 10 second connection timeout
   
-  String jsonData = "{\"image\":\"" + imageData + "\"}";
-  int httpResponseCode = http.POST(jsonData);
+  // Create proper multipart form data
+  String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+  String formData = "--" + boundary + "\r\n";
+  formData += "Content-Disposition: form-data; name=\"file\"; filename=\"checkin.jpg\"\r\n";
+  formData += "Content-Type: image/jpeg\r\n\r\n";
   
-  String response = http.getString();
+  // Convert to bytes for multipart
+  String binaryData = "";
+  for (int i = 0; i < fb->len; i++) {
+    binaryData += (char)fb->buf[i];
+  }
+  
+  formData += binaryData;
+  formData += "\r\n--" + boundary + "--\r\n";
+  
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+  int httpResponseCode = http.POST(formData);
+  
+  esp_camera_fb_return(fb);
+  
+  String response = "";
+  if (httpResponseCode > 0) {
+    response = http.getString();
+  } else {
+    response = "{\"success\":false,\"error\":\"Connection failed: " + String(httpResponseCode) + "\"}";
+  }
   http.end();
 
   DynamicJsonDocument responseDoc(1024);
@@ -1392,42 +1746,11 @@ static esp_err_t checkin_handler(httpd_req_t *req) {
     String userName = responseDoc["user"]["name"];
     float confidence = responseDoc["user"]["confidence"];
     
-    // OLED display (COMMENTED FOR TESTING)
-    /*
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("Check-in Success!");
-    display.println("Name: " + userName);
-    display.print("Confidence: ");
-    display.println(confidence);
-    display.display();
-    */
-    
     Serial.println("Check-in Success! Name: " + userName + " Confidence: " + String(confidence));
-    
-    // TTS (COMMENTED FOR TESTING)
-    /*
-    String message = "Bạn đã điểm danh thành công với người dùng " + userName;
-    playTTS(message);
-    */
     
     httpd_resp_send(req, response.c_str(), response.length());
   } else {
-    // OLED display (COMMENTED FOR TESTING)
-    /*
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("Check-in Failed!");
-    display.println("Face not recognized");
-    display.display();
-    */
-    
     Serial.println("Check-in Failed! Face not recognized");
-    
-    // TTS (COMMENTED FOR TESTING)
-    /*
-    playTTS("Điểm danh thất bại. Khuôn mặt không được nhận diện.");
-    */
     
     httpd_resp_send(req, response.c_str(), response.length());
   }
@@ -1464,57 +1787,54 @@ static esp_err_t register_handler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
-  String imageData = base64_encode(fb->buf, fb->len);
-  esp_camera_fb_return(fb);
-
   HTTPClient http;
   http.begin(serverUrl + String("/api/v1/register"));
-  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(30000); // 30 second timeout
+  http.setConnectTimeout(10000); // 10 second connection timeout
   
-  String jsonData = "{\"name\":\"" + name + "\",\"student_code\":\"" + studentCode + "\",\"image\":\"" + imageData + "\"}";
-  int httpResponseCode = http.POST(jsonData);
+  // Create proper multipart form data
+  String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+  String formData = "--" + boundary + "\r\n";
+  formData += "Content-Disposition: form-data; name=\"file\"; filename=\"register.jpg\"\r\n";
+  formData += "Content-Type: image/jpeg\r\n\r\n";
   
-  String response = http.getString();
+  // Convert to bytes for multipart
+  String binaryData = "";
+  for (int i = 0; i < fb->len; i++) {
+    binaryData += (char)fb->buf[i];
+  }
+  
+  formData += binaryData;
+  formData += "\r\n--" + boundary + "\r\n";
+  formData += "Content-Disposition: form-data; name=\"name\"\r\n\r\n";
+  formData += name;
+  formData += "\r\n--" + boundary + "\r\n";
+  formData += "Content-Disposition: form-data; name=\"student_code\"\r\n\r\n";
+  formData += studentCode;
+  formData += "\r\n--" + boundary + "--\r\n";
+  
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+  int httpResponseCode = http.POST(formData);
+  
+  esp_camera_fb_return(fb);
+  
+  String response = "";
+  if (httpResponseCode > 0) {
+    response = http.getString();
+  } else {
+    response = "{\"success\":false,\"error\":\"Connection failed: " + String(httpResponseCode) + "\"}";
+  }
   http.end();
 
   if (httpResponseCode > 0) {
     DynamicJsonDocument responseDoc(1024);
     deserializeJson(responseDoc, response);
     
-    // OLED display (COMMENTED FOR TESTING)
-    /*
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("Registration");
-    display.println("completed!");
-    display.display();
-    */
-    
     Serial.println("Registration completed! Name: " + name + " Student Code: " + studentCode);
-    
-    // TTS (COMMENTED FOR TESTING)
-    /*
-    String message = "Bạn đã đăng ký thành công với tên " + name;
-    playTTS(message);
-    */
     
     httpd_resp_send(req, response.c_str(), response.length());
   } else {
-    // OLED display (COMMENTED FOR TESTING)
-    /*
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("Registration");
-    display.println("failed!");
-    display.display();
-    */
-    
     Serial.println("Registration failed!");
-    
-    // TTS (COMMENTED FOR TESTING)
-    /*
-    playTTS("Đăng ký thất bại. Vui lòng thử lại.");
-    */
     
     httpd_resp_send_500(req);
   }
@@ -1543,16 +1863,39 @@ static esp_err_t test_connection_handler(httpd_req_t *req) {
 static esp_err_t users_handler(httpd_req_t *req) {
   HTTPClient http;
   http.begin(serverUrl + String("/api/v1/users"));
+  http.setTimeout(10000); // 10 second timeout
+  http.setConnectTimeout(5000); // 5 second connection timeout
+  
   int httpResponseCode = http.GET();
   
-  String response = http.getString();
+  String response = "";
+  if (httpResponseCode > 0) {
+    response = http.getString();
+  } else {
+    response = "[]"; // Return empty array on error
+  }
   http.end();
   
   httpd_resp_set_type(req, "application/json");
   return httpd_resp_send(req, response.c_str(), response.length());
 }
 
-static esp_err_t auto_detection_handler(httpd_req_t *req) {
+
+static esp_err_t status_handler(httpd_req_t *req) {
+  DynamicJsonDocument responseDoc(512);
+  responseDoc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+  responseDoc["wifi_ip"] = WiFi.localIP().toString();
+  responseDoc["server_url"] = serverUrl;
+  responseDoc["uptime_ms"] = millis();
+  
+  String response;
+  serializeJson(responseDoc, response);
+  
+  httpd_resp_set_type(req, "application/json");
+  return httpd_resp_send(req, response.c_str(), response.length());
+}
+
+static esp_err_t camera_setting_handler(httpd_req_t *req) {
   String body = "";
   char buf[1024];
   int ret, remaining = req->content_len;
@@ -1571,35 +1914,49 @@ static esp_err_t auto_detection_handler(httpd_req_t *req) {
   DynamicJsonDocument doc(1024);
   deserializeJson(doc, body);
   
-  bool enabled = doc["enabled"];
-  autoDetectionEnabled = enabled;
+  String setting = doc["setting"];
+  int value = doc["value"];
   
-  DynamicJsonDocument responseDoc(512);
-  responseDoc["success"] = true;
-  responseDoc["auto_detection_enabled"] = autoDetectionEnabled;
-  responseDoc["message"] = autoDetectionEnabled ? "Auto detection enabled" : "Auto detection disabled";
+  sensor_t * s = esp_camera_sensor_get();
+  if (s != NULL) {
+    bool success = false;
+    
+    if (setting == "brightness") {
+      s->set_brightness(s, value);
+      success = true;
+    } else if (setting == "contrast") {
+      s->set_contrast(s, value);
+      success = true;
+    } else if (setting == "saturation") {
+      s->set_saturation(s, value);
+      success = true;
+    } else if (setting == "sharpness") {
+      s->set_sharpness(s, value);
+      success = true;
+    }
+    
+    DynamicJsonDocument responseDoc(512);
+    responseDoc["success"] = success;
+    responseDoc["setting"] = setting;
+    responseDoc["value"] = value;
+    responseDoc["message"] = success ? "Setting updated successfully" : "Invalid setting";
+    
+    String response;
+    serializeJson(responseDoc, response);
+    
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, response.c_str(), response.length());
+  }
   
-  String response;
-  serializeJson(responseDoc, response);
+  DynamicJsonDocument errorDoc(256);
+  errorDoc["success"] = false;
+  errorDoc["error"] = "Camera sensor not available";
+  
+  String errorResponse;
+  serializeJson(errorDoc, errorResponse);
   
   httpd_resp_set_type(req, "application/json");
-  return httpd_resp_send(req, response.c_str(), response.length());
-}
-
-static esp_err_t status_handler(httpd_req_t *req) {
-  DynamicJsonDocument responseDoc(512);
-  responseDoc["auto_detection_enabled"] = autoDetectionEnabled;
-  responseDoc["face_currently_detected"] = faceCurrentlyDetected;
-  responseDoc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
-  responseDoc["wifi_ip"] = WiFi.localIP().toString();
-  responseDoc["server_url"] = serverUrl;
-  responseDoc["uptime_ms"] = millis();
-  
-  String response;
-  serializeJson(responseDoc, response);
-  
-  httpd_resp_set_type(req, "application/json");
-  return httpd_resp_send(req, response.c_str(), response.length());
+  return httpd_resp_send(req, errorResponse.c_str(), errorResponse.length());
 }
 
 void startCameraServer(){
@@ -1693,17 +2050,18 @@ void startCameraServer(){
     .user_ctx  = NULL
   };
 
-  httpd_uri_t auto_detection_uri = {
-    .uri       = "/auto-detection",
-    .method    = HTTP_POST,
-    .handler   = auto_detection_handler,
-    .user_ctx  = NULL
-  };
 
   httpd_uri_t status_uri = {
     .uri       = "/status",
     .method    = HTTP_GET,
     .handler   = status_handler,
+    .user_ctx  = NULL
+  };
+
+  httpd_uri_t camera_setting_uri = {
+    .uri       = "/camera-setting",
+    .method    = HTTP_POST,
+    .handler   = camera_setting_handler,
     .user_ctx  = NULL
   };
 
@@ -1715,8 +2073,8 @@ void startCameraServer(){
     httpd_register_uri_handler(camera_httpd, &register_uri);
     httpd_register_uri_handler(camera_httpd, &test_connection_uri);
     httpd_register_uri_handler(camera_httpd, &users_uri);
-    httpd_register_uri_handler(camera_httpd, &auto_detection_uri);
     httpd_register_uri_handler(camera_httpd, &status_uri);
+    httpd_register_uri_handler(camera_httpd, &camera_setting_uri);
     Serial.println("✅ Main server started successfully on port 80");
   } else {
     Serial.printf("❌ Failed to start main server on port 80. Error: 0x%x\n", main_err);
@@ -1729,31 +2087,6 @@ void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
   
-  // Initialize OLED (COMMENTED FOR TESTING)
-  /*
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-  display.println("Initializing...");
-  display.display();
-  */
-
-  // Initialize Audio (COMMENTED FOR TESTING)
-  /*
-  audio.setPinout(I2S_BCLK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN);
-  audio.setVolume(10);
-  */
-
-  // Initialize buttons (COMMENTED FOR TESTING)
-  /*
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(FLASH_PIN, INPUT_PULLUP);
-  */
 
   // Camera configuration from original example
   camera_config_t config;
@@ -1779,66 +2112,62 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
   
   if(psramFound()){
-    config.frame_size = FRAMESIZE_VGA;  // 640x480 - chất lượng tốt hơn
-    config.jpeg_quality = 8;  // Chất lượng cao hơn (1-63, số càng nhỏ càng tốt)
-    config.fb_count = 2;
+    config.frame_size = FRAMESIZE_SVGA;  // 800x600 - chất lượng cao hơn
+    config.jpeg_quality = 6;  // Chất lượng rất cao (1-63, số càng nhỏ càng tốt)
+    config.fb_count = 3;  // Tăng buffer để tránh lag
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;  // Tối ưu performance
   } else {
-    config.frame_size = FRAMESIZE_QVGA;  // 320x240 - giữ nguyên cho board không có PSRAM
-    config.jpeg_quality = 10;  // Chất lượng tốt hơn
-    config.fb_count = 1;
+    config.frame_size = FRAMESIZE_VGA;  // 640x480 - tăng từ QVGA
+    config.jpeg_quality = 8;  // Chất lượng cao hơn
+    config.fb_count = 2;  // Tăng buffer
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   }
 
   Serial.println("Initializing camera...");
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("❌ Camera init failed with error 0x%x\n", err);
-    // OLED display (COMMENTED FOR TESTING)
-    /*
-    display.clearDisplay();
-    display.setCursor(0,0);
-    display.println("Camera init failed!");
-    display.display();
-    */
     return;
   } else {
     Serial.println("✅ Camera initialized successfully");
     
-    // Get camera sensor info
+    // Get camera sensor info and optimize settings
     sensor_t * s = esp_camera_sensor_get();
     if (s != NULL) {
       Serial.printf("Camera sensor initialized successfully\n");
       Serial.printf("Camera resolution: %d\n", s->status.framesize);
       Serial.printf("Camera quality: %d\n", s->status.quality);
+      
+      // Optimize camera settings for better quality
+      s->set_brightness(s, 0);     // Brightness: -2 to 2
+      s->set_contrast(s, 0);       // Contrast: -2 to 2  
+      s->set_saturation(s, 0);     // Saturation: -2 to 2
+      s->set_sharpness(s, 0);      // Sharpness: -2 to 2
+      s->set_denoise(s, 0);        // Denoise: 0 to 1
+      s->set_gainceiling(s, (gainceiling_t)0);  // Gain ceiling: 2x to 128x
+      s->set_colorbar(s, 0);       // Color bar: 0 to 1
+      s->set_whitebal(s, 1);       // White balance: 0 to 1
+      s->set_gain_ctrl(s, 1);      // Gain control: 0 to 1
+      s->set_exposure_ctrl(s, 1);  // Exposure control: 0 to 1
+      s->set_hmirror(s, 0);        // Horizontal mirror: 0 to 1
+      s->set_vflip(s, 0);          // Vertical flip: 0 to 1
+      s->set_aec2(s, 0);           // AEC2: 0 to 1
+      s->set_awb_gain(s, 1);       // AWB gain: 0 to 1
+      s->set_agc_gain(s, 0);       // AGC gain: 0 to 30
+      s->set_aec_value(s, 300);    // AEC value: 0 to 1200
+      
+      Serial.println("✅ Camera settings optimized for high quality");
     }
   }
 
   // WiFi connection
   WiFi.begin(ssid, password);
-  // OLED display (COMMENTED FOR TESTING)
-  /*
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.println("Connecting to WiFi...");
-  display.display();
-  */
   
   Serial.println("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-    // display.print(".");
-    // display.display();
   }
-  
-  // OLED display (COMMENTED FOR TESTING)
-  /*
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.println("WiFi connected!");
-  display.print("IP: ");
-  display.println(WiFi.localIP());
-  display.display();
-  */
   
   Serial.println("\nWiFi connected!");
   Serial.print("IP: ");
@@ -1846,99 +2175,12 @@ void setup() {
 
   startCameraServer();
   
-  // OLED display (COMMENTED FOR TESTING)
-  /*
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.println("System Ready!");
-  display.println("Press button to");
-  display.println("check-in");
-  display.println("Web: http://" + WiFi.localIP().toString());
-  display.display();
-  */
-  
   Serial.println("System Ready!");
   Serial.println("Web interface: http://" + WiFi.localIP().toString());
   Serial.println("Use web interface to test API");
 }
 
 void loop() {
-  // Button functionality (COMMENTED FOR TESTING)
-  // All interactions now through web interface
-  /*
-  // Check button press for check-in
-  if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonPress > debounceDelay) {
-    lastButtonPress = millis();
-    
-  display.clearDisplay();
-  display.setCursor(0,0);
-    display.println("Taking photo...");
-  display.display();
-  
-  camera_fb_t * fb = esp_camera_fb_get();
-  if (!fb) {
-      Serial.println("Camera capture failed");
-      display.clearDisplay();
-      display.setCursor(0,0);
-      display.println("Camera error!");
-      display.display();
-    return;
-  }
-  
-    String imageData = base64_encode(fb->buf, fb->len);
-    esp_camera_fb_return(fb);
-
-  HTTPClient http;
-    http.begin(serverUrl + String("/checkin"));
-  http.addHeader("Content-Type", "application/json");
-  
-    String jsonData = "{\"image\":\"" + imageData + "\"}";
-    int httpResponseCode = http.POST(jsonData);
-    
-    String response = http.getString();
-    http.end();
-
-    DynamicJsonDocument responseDoc(1024);
-    deserializeJson(responseDoc, response);
-    
-    if (responseDoc["success"]) {
-      String userName = responseDoc["user"]["name"];
-      float confidence = responseDoc["user"]["confidence"];
-      
-      display.clearDisplay();
-      display.setCursor(0,0);
-      display.println("Check-in Success!");
-      display.println("Name: " + userName);
-      display.print("Confidence: ");
-      display.println(confidence);
-      display.display();
-      
-      String message = "Bạn đã điểm danh thành công với người dùng " + userName;
-      playTTS(message);
-    } else {
-      display.clearDisplay();
-      display.setCursor(0,0);
-      display.println("Check-in Failed!");
-      display.println("Face not recognized");
-      display.display();
-      
-      playTTS("Điểm danh thất bại. Khuôn mặt không được nhận diện.");
-    }
-  }
-
-  // Check flash button for registration
-  if (digitalRead(FLASH_PIN) == LOW && millis() - lastButtonPress > debounceDelay) {
-    lastButtonPress = millis();
-    
-  display.clearDisplay();
-  display.setCursor(0,0);
-    display.println("Registration mode");
-    display.println("Use web interface");
-  display.display();
-  
-    playTTS("Chế độ đăng ký. Vui lòng sử dụng giao diện web.");
-  }
-  */
-
+  // All interactions through web interface
   delay(100);
 }

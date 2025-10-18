@@ -54,10 +54,7 @@ https://github.com/bblanchon/ArduinoJson
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <Audio.h>
+// OLED và Audio libraries đã được loại bỏ
 
 void setup() {
   Serial.begin(115200);
@@ -72,10 +69,10 @@ void loop() {
 ## Lưu ý quan trọng
 
 ### 1. Phiên bản thư viện:
-- **Adafruit SSD1306:** >= 2.5.0
-- **Adafruit GFX Library:** >= 1.11.0
-- **ESP32-audioI2S:** >= 2.0.0
 - **ArduinoJson:** >= 6.0.0
+- **WiFi:** Built-in ESP32
+- **HTTPClient:** Built-in ESP32
+- **esp_camera:** Built-in ESP32
 
 ### 2. Board Manager:
 - **ESP32 Board:** esp32 by Espressif Systems
