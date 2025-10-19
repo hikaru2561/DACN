@@ -64,7 +64,7 @@
 // ===================
 // WiFi Configuration
 // ===================
-const char* ssid = "K09";           // Thay đổi SSID WiFi của bạn
+const char* ssid = "K9";           // Thay đổi SSID WiFi của bạn
 const char* password = "nk111111";   // Thay đổi password WiFi của bạn
 
 // ===================
