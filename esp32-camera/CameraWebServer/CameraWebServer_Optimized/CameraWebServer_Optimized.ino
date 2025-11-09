@@ -50,8 +50,8 @@
 #endif
 
 // WiFi Configuration
-const char* ssid = "TRA SUA ZEEK TEA";
-const char* password = "xincamon";
+const char* ssid = "K9";
+const char* password = "nk111111";
 
 // Global variables
 httpd_handle_t stream_httpd = NULL;
@@ -443,7 +443,7 @@ void setup() {
   // ⚡ HIGH QUALITY: XGA 1024x768 for quality + speed
   if(psramFound()){
     config.frame_size = FRAMESIZE_XGA;      // 1024x768
-    config.jpeg_quality = 14;               // 12 = balanced (30-35KB/frame)
+    config.jpeg_quality = 15;               // 12 = balanced (30-35KB/frame)
     config.fb_count = 2;                    // 1 buffer for speed
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.grab_mode = CAMERA_GRAB_LATEST;  // Always get latest frame

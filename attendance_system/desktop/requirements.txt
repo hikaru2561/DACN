@@ -1,0 +1,30 @@
+# Desktop UI Requirements
+# Tkinter GUI Application
+
+# Core libraries (built-in)
+# tkinter - GUI framework (built-in Python)
+
+# HTTP Client
+requests==2.31.0
+
+# Image processing
+Pillow==10.1.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Excel export
+openpyxl==3.1.2
+pandas==2.1.3
+
+# Computer Vision & Face Detection
+opencv-python==4.8.1.78
+numpy==1.26.2
+mediapipe==0.10.8
+
+# Face Recognition (InsightFace) - Requires ONNX Runtime
+onnxruntime==1.16.3
+# insightface==0.7.3  # Uncomment to install InsightFace (optional)
+
+# Charts/Graphs (optional)
+matplotlib==3.8.2
