@@ -1,7 +1,7 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 *.so
 .Python
 build/
@@ -33,25 +33,26 @@ ENV/
 *.swo
 *~
 
+# Environment
+.env
+.env.local
+*.log
+
+# Dataset
+dataset/raw/
+dataset/processed/
+*.pkl
+
+# Temporary
+temp/
+logs/
+*.tmp
+
 # OS
 .DS_Store
 Thumbs.db
 
-# Project specific
-dataset/*/
-!dataset/.gitkeep
-client/users.json
-*.log
-
-# Temporary files
-*.tmp
-temp/
-tmp/
-
-# Backup files
-*.bak
-*.backup
-structure_backup.txt
-
-# Old system backup (uncomment if you want to ignore)
-# old_system/
+# Project-specific
+attendance_system/models/*.pth
+attendance_system/models/*.h5
+attendance_system/backup_unused_files/
