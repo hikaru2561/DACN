@@ -599,28 +599,28 @@ class MainApplication:
     def open_teachers(self):
         """Mở module quản lý giảng viên"""
         if TEACHER_MODULE_AVAILABLE:
-            TeacherManagementWindow(self.root)
+            TeacherManagementWindow(self.root, self.api)
         else:
             messagebox.showerror("Lỗi", "Module Quản lý Giảng viên chưa được cài đặt!")
     
     def open_subjects(self):
         """Mở module quản lý môn học"""
         if SUBJECT_MODULE_AVAILABLE:
-            SubjectManagementWindow(self.root)
+            SubjectManagementWindow(self.root, self.api)
         else:
             messagebox.showerror("Lỗi", "Module Quản lý Môn học chưa được cài đặt!")
     
     def open_classes(self):
         """Mở module quản lý lớp học"""
         if CLASS_MODULE_AVAILABLE:
-            ClassManagementWindow(self.root)
+            ClassManagementWindow(self.root, self.api)
         else:
             messagebox.showerror("Lỗi", "Module Quản lý Lớp học chưa được cài đặt!")
     
     def open_sessions(self):
         """Mở module quản lý buổi học"""
         if SESSION_MODULE_AVAILABLE:
-            SessionManagementWindow(self.root)
+            SessionManagementWindow(self.root, self.api)
         else:
             messagebox.showinfo("Coming Soon", "Module Quản lý Buổi học đang phát triển...")
     
@@ -635,7 +635,12 @@ class MainApplication:
     
     def open_cameras(self):
         """Mở module quản lý camera"""
-        messagebox.showinfo("Coming Soon", "Module Quản lý Camera đang phát triển...")
+        try:
+            from camera_management_module import CameraManagementWindow
+            CameraManagementWindow(self.root, self.api)
+        except ImportError as e:
+            print(f"❌ Error importing camera module: {e}")
+            messagebox.showerror("Lỗi", "Không thể mở module quản lý camera!")
     
     def open_attendance_history(self):
         """Mở module lịch sử điểm danh"""
@@ -644,7 +649,7 @@ class MainApplication:
             return
         
         try:
-            AttendanceHistoryWindow(self.root)
+            AttendanceHistoryWindow(self.root, self.api)
         except Exception as e:
             print(f"❌ Error opening attendance history: {e}")
             import traceback
@@ -653,7 +658,12 @@ class MainApplication:
     
     def open_reports(self):
         """Mở module báo cáo"""
-        messagebox.showinfo("Coming Soon", "Module Báo cáo đang phát triển...")
+        try:
+            from report_module import ReportWindow
+            ReportWindow(self.root, self.api)
+        except ImportError as e:
+            print(f"❌ Error importing report module: {e}")
+            messagebox.showerror("Lỗi", "Không thể mở module báo cáo!")
 
 
 # ============================================================================

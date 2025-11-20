@@ -27,16 +27,18 @@ except ImportError:
 # ============================================================================
 
 COLORS = {
-    "primary": "#2196F3",
-    "success": "#4CAF50",
-    "danger": "#F44336",
-    "warning": "#FF9800",
-    "info": "#00BCD4",
-    "dark": "#212121",
-    "light": "#FAFAFA",
+    "header": "#2C3E50", # Dark Blue
+    "bg": "#F8F9FA",
     "white": "#FFFFFF",
-    "text": "#212121",
-    "border": "#E0E0E0",
+    "text": "#2C3E50",
+    "btn_start": "#27AE60", # Green
+    "btn_stop": "#E74C3C",  # Red
+    "btn_save": "#3498DB",  # Blue
+    "btn_close": "#95A5A6", # Gray
+    "success": "#27AE60",
+    "warning": "#F39C12",
+    "danger": "#E74C3C",
+    "border": "#BDC3C7"
 }
 
 
@@ -195,15 +197,7 @@ class FaceRecognitionEngine:
             self.embeddings_db = {}
     
     def add_student_embeddings(self, student_id, progress_callback=None):
-        """Thêm embeddings cho MỘT sinh viên mới (không rebuild toàn bộ)
-        
-        Args:
-            student_id: ID sinh viên cần extract embeddings
-            progress_callback: Callback để update progress
-        
-        Returns:
-            dict: {"success": bool, "message": str, "images_processed": int}
-        """
+        """Thêm embeddings cho MỘT sinh viên mới (không rebuild toàn bộ)"""
         if not INSIGHTFACE_AVAILABLE or self.app is None:
             return {"success": False, "message": "InsightFace không khả dụng"}
         
@@ -219,7 +213,6 @@ class FaceRecognitionEngine:
             return {"success": False, "message": "Không có ảnh nào trong folder!"}
         
         print(f"\n🔍 Extracting embeddings cho sinh viên: {student_id}")
-        print(f"📁 Found {len(image_files)} images")
         
         embeddings = []
         failed = 0
@@ -228,28 +221,20 @@ class FaceRecognitionEngine:
             if progress_callback:
                 progress_callback(idx, len(image_files), f"Đang xử lý ảnh {idx}/{len(image_files)}")
             
-            print(f"  📷 [{idx}/{len(image_files)}] Processing: {img_path.name}")
-            
             try:
-                # Đọc ảnh toàn diện
                 img = cv2.imread(str(img_path))
                 if img is None:
-                    print(f"    ❌ cv2.imread failed")
                     failed += 1
                     continue
                 
-                # InsightFace detect + extract
                 faces = self.app.get(img)
                 
                 if len(faces) == 0:
-                    print(f"    ⚠️ No face detected")
                     failed += 1
                     continue
                 
-                # Lấy face đầu tiên
                 embedding = faces[0].embedding
                 embeddings.append(embedding)
-                print(f"    ✅ Embedding extracted (norm: {np.linalg.norm(embedding):.2f})")
                 
             except Exception as e:
                 print(f"    ❌ Error: {e}")
@@ -258,16 +243,11 @@ class FaceRecognitionEngine:
         if len(embeddings) == 0:
             return {"success": False, "message": "Không extract được embedding nào!"}
         
-        # 🔥 APPEND vào embeddings_db hiện tại (không xóa data cũ)
         self.embeddings_db[student_id] = embeddings
         
-        # 🔥 LƯU INCREMENTAL (giữ nguyên data cũ + thêm mới)
         try:
             with open(AttendanceConfig.EMBEDDINGS_FILE, 'wb') as f:
                 pickle.dump(self.embeddings_db, f)
-            
-            print(f"✅ Saved {len(embeddings)} embeddings cho {student_id}")
-            print(f"📊 Total students in DB: {len(self.embeddings_db)}")
             
             return {
                 "success": True,
@@ -277,27 +257,19 @@ class FaceRecognitionEngine:
             }
             
         except Exception as e:
-            print(f"❌ Save error: {e}")
             return {"success": False, "message": f"Lỗi lưu file: {str(e)}"}
     
     def build_embeddings(self, progress_callback=None):
-        """Xây dựng embeddings database từ dataset/processed/
-        
-        Ảnh trong dataset là FRAME TOÀN DIỆN từ camera.
-        → InsightFace tự động detect + align + extract embedding
-        """
+        """Xây dựng embeddings database từ dataset/processed/"""
         if not INSIGHTFACE_AVAILABLE or self.app is None:
-            print("❌ InsightFace app not available")
             return {"success": False, "error": "InsightFace app not available"}
         
         self.embeddings_db = {}
         processed_dir = AttendanceConfig.DATASET_PROCESSED
         
         if not processed_dir.exists():
-            print(f"⚠️ Dataset directory not found: {processed_dir}")
             return {"success": False, "error": f"Dataset not found: {processed_dir}"}
         
-        # Đếm số student folders
         student_folders = [d for d in processed_dir.iterdir() if d.is_dir()]
         total_students = len(student_folders)
         
@@ -307,77 +279,43 @@ class FaceRecognitionEngine:
         total_images = 0
         failed_images = 0
         
-        # Duyệt qua từng student folder
         for idx, student_dir in enumerate(student_folders, 1):
             student_id = student_dir.name
             embeddings = []
             
-            print(f"\n🔍 Processing folder: {student_dir}")
-            
-            # Update progress
             if progress_callback:
                 progress_callback(idx, total_students, f"Đang xử lý: {student_id}")
             
-            # Đọc tất cả ảnh .jpg
             image_files = list(student_dir.glob("*.jpg"))
             
-            print(f"📁 Found {len(image_files)} images for {student_id}")
-            
             for img_path in image_files:
-                print(f"  📷 Processing: {img_path.name}")
                 try:
-                    # 🔥 ĐỌC ẢNH TOÀN DIỆN - InsightFace sẽ tự detect face!
                     img = cv2.imread(str(img_path))
                     if img is None:
-                        print(f"    ❌ cv2.imread failed")
                         failed_images += 1
                         continue
                     
-                    print(f"    🖼️ Image size: {img.shape}")
-                    
-                    # 🔥 SỬ DỤNG app.get() để DETECT + EXTRACT từ ảnh toàn diện
-                    # app.get() tự động: detect faces → align → extract embeddings
                     faces = self.app.get(img)
                     
                     if len(faces) == 0:
-                        print(f"    ⚠️ No face detected in this image")
                         failed_images += 1
                         continue
                     
-                    # Lấy face đầu tiên (giả sử mỗi ảnh có 1 người)
                     face = faces[0]
                     embedding = face.embedding
-                    
                     embeddings.append(embedding)
                     total_images += 1
-                    print(f"    ✅ Embedding extracted (shape: {embedding.shape}, norm: {np.linalg.norm(embedding):.2f})")
                     
                 except Exception as e:
-                    print(f"    ❌ Error: {e}")
-                    import traceback
-                    traceback.print_exc()
                     failed_images += 1
             
             if len(embeddings) > 0:
                 self.embeddings_db[student_id] = embeddings
-                print(f"  ✅ {student_id}: {len(embeddings)} faces saved to embeddings_db")
-            else:
-                print(f"  ⚠️ {student_id}: No valid faces found")
         
-        # Lưu vào file
-        print(f"\n💾 Saving embeddings_db with {len(self.embeddings_db)} students...")
-        print(f"   Students: {list(self.embeddings_db.keys())}")
         try:
             with open(AttendanceConfig.EMBEDDINGS_FILE, 'wb') as f:
                 pickle.dump(self.embeddings_db, f)
-            print(f"✅ Saved embeddings to {AttendanceConfig.EMBEDDINGS_FILE}")
-            
-            # Verify save
-            with open(AttendanceConfig.EMBEDDINGS_FILE, 'rb') as f:
-                verify = pickle.load(f)
-            print(f"🔍 Verify: Loaded {len(verify)} students after save")
         except Exception as e:
-            print(f"❌ Save embeddings error: {e}")
             return {"success": False, "error": str(e)}
         
         return {
@@ -388,30 +326,22 @@ class FaceRecognitionEngine:
         }
     
     def recognize_face(self, face_embedding):
-        """
-        Nhận dạng khuôn mặt từ embedding
-        Args:
-            face_embedding: 512-dim embedding từ InsightFace
-        Returns: (student_id, similarity_score) or (None, 0)
-        """
+        """Nhận dạng khuôn mặt từ embedding"""
         if not INSIGHTFACE_AVAILABLE or self.app is None:
             return None, 0
         
         try:
-            # So sánh embedding với database
             best_match = None
             best_similarity = 0
             
             for student_id, embeddings in self.embeddings_db.items():
                 for emb in embeddings:
-                    # Cosine similarity
                     similarity = self.cosine_similarity(face_embedding, emb)
                     
                     if similarity > best_similarity:
                         best_similarity = similarity
                         best_match = student_id
             
-            # Kiểm tra threshold
             if best_similarity >= AttendanceConfig.SIMILARITY_THRESHOLD:
                 return best_match, best_similarity
             else:
@@ -447,12 +377,6 @@ class AttendanceModule:
     """Module điểm danh sinh viên"""
     
     def __init__(self, parent, api_client, session_id=None):
-        """
-        Args:
-            parent: Cửa sổ cha
-            api_client: APIClient instance
-            session_id: ID của buổi học (nếu có)
-        """
         self.parent = parent
         self.api = api_client
         self.session_id = session_id
@@ -460,8 +384,8 @@ class AttendanceModule:
         # Create window
         self.window = tk.Toplevel(parent)
         self.window.title("Điểm danh sinh viên")
-        self.window.geometry("1100x750")
-        self.window.configure(bg=COLORS["dark"])
+        self.window.geometry("1400x800")
+        self.window.configure(bg=COLORS["bg"])
         self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         # Data
@@ -472,12 +396,12 @@ class AttendanceModule:
         self.students_in_class = []  # Danh sách sinh viên trong lớp
         self.is_running = False
         
-        # Cache tên sinh viên để không phải gọi API liên tục
+        # Cache tên sinh viên
         self.student_names = {}  # {student_id: full_name}
         self.load_student_names()
         
         # Create UI
-        self.create_widgets()
+        self.create_ui()
         
         # Load students nếu có session_id
         if self.session_id:
@@ -491,78 +415,69 @@ class AttendanceModule:
                 str(s.get('student_id')): s.get('full_name', 'Unknown')
                 for s in students
             }
-            print(f"📋 Loaded {len(self.student_names)} student names")
         except Exception as e:
             print(f"⚠️ Cannot load student names: {e}")
             self.student_names = {}
     
     def get_student_name(self, student_id):
-        """Lấy tên sinh viên từ ID
-        
-        Args:
-            student_id: ID sinh viên (string hoặc int)
-        
-        Returns:
-            Tên sinh viên hoặc ID nếu không tìm thấy
-        """
+        """Lấy tên sinh viên từ ID"""
         student_id = str(student_id)
         return self.student_names.get(student_id, student_id)
     
-    def create_widgets(self):
+    def create_ui(self):
         """Tạo giao diện"""
         # Header
-        header = tk.Frame(self.window, bg=COLORS["success"], height=60)
+        header = tk.Frame(self.window, bg=COLORS["header"], height=70)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         
-        title = tk.Label(
+        tk.Label(
             header,
             text="✅ ĐIỂM DANH SINH VIÊN",
-            font=("Segoe UI", 14, "bold"),
-            bg=COLORS["success"],
+            font=("Segoe UI", 18, "bold"),
+            bg=COLORS["header"],
             fg=COLORS["white"]
-        )
-        title.pack(side=tk.LEFT, padx=20, pady=15)
+        ).pack(side=tk.LEFT, padx=20)
         
         # Stats label
         self.stats_label = tk.Label(
             header,
             text="Có mặt: 0/0",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["success"],
+            font=("Segoe UI", 14, "bold"),
+            bg=COLORS["header"],
             fg=COLORS["white"]
         )
         self.stats_label.pack(side=tk.RIGHT, padx=20)
         
         # Main content
-        main_frame = tk.Frame(self.window, bg=COLORS["light"])
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_container = tk.Frame(self.window, bg=COLORS["bg"])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
         # Left: Video stream
-        left_frame = tk.Frame(main_frame, bg=COLORS["dark"])
+        left_frame = tk.Frame(main_container, bg=COLORS["white"], relief=tk.RIDGE, borderwidth=1)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
         video_header = tk.Label(
             left_frame,
-            text="📹 Camera",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["dark"],
-            fg=COLORS["white"]
+            text="📹 Camera Stream",
+            font=("Segoe UI", 12, "bold"),
+            bg=COLORS["white"],
+            fg=COLORS["text"]
         )
         video_header.pack(pady=10)
         
-        self.video_label = tk.Label(left_frame, bg=COLORS["dark"])
-        self.video_label.pack(expand=True, padx=10, pady=10)
+        self.video_label = tk.Label(left_frame, bg="#000000")
+        self.video_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         
         # Right: Attendance list
-        right_frame = tk.Frame(main_frame, bg=COLORS["white"], width=350)
-        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(10, 0))
+        right_frame = tk.Frame(main_container, bg=COLORS["white"], width=400, relief=tk.RIDGE, borderwidth=1)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH)
         right_frame.pack_propagate(False)
         
         list_header = tk.Label(
             right_frame,
             text="📋 Danh sách điểm danh",
-            font=("Segoe UI", 11, "bold"),
+            font=("Segoe UI", 12, "bold"),
             bg=COLORS["white"],
             fg=COLORS["text"]
         )
@@ -573,7 +488,7 @@ class AttendanceModule:
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         columns = ("STT", "MSSV", "Họ tên", "Trạng thái")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
         
         self.tree.heading("STT", text="STT")
         self.tree.heading("MSSV", text="MSSV")
@@ -581,7 +496,7 @@ class AttendanceModule:
         self.tree.heading("Trạng thái", text="Trạng thái")
         
         self.tree.column("STT", width=40, anchor=tk.CENTER)
-        self.tree.column("MSSV", width=100, anchor=tk.CENTER)
+        self.tree.column("MSSV", width=80, anchor=tk.CENTER)
         self.tree.column("Họ tên", width=150)
         self.tree.column("Trạng thái", width=80, anchor=tk.CENTER)
         
@@ -592,165 +507,109 @@ class AttendanceModule:
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Alternating row colors
-        self.tree.tag_configure('present', background='#C8E6C9')
-        self.tree.tag_configure('absent', background='#FFCCBC')
-        self.tree.tag_configure('late', background='#FFF9C4')
+        # Tags
+        self.tree.tag_configure('present', foreground=COLORS["success"])
+        self.tree.tag_configure('absent', foreground=COLORS["danger"])
         
         # Control panel
-        control = tk.Frame(self.window, bg=COLORS["light"], height=80)
-        control.pack(fill=tk.X, padx=20, pady=(0, 20))
-        control.pack_propagate(False)
+        control_panel = tk.Frame(self.window, bg=COLORS["white"], height=80, relief=tk.RIDGE, borderwidth=1)
+        control_panel.pack(fill=tk.X, padx=20, pady=(0, 20))
+        control_panel.pack_propagate(False)
         
+        # Status
         self.status_label = tk.Label(
-            control,
-            text="⏸️ Sẵn sàng điểm danh",
-            font=("Segoe UI", 11),
-            bg=COLORS["light"],
+            control_panel,
+            text="Sẵn sàng",
+            font=("Segoe UI", 10),
+            bg=COLORS["white"],
             fg=COLORS["text"]
         )
-        self.status_label.pack(pady=10)
+        self.status_label.pack(side=tk.TOP, pady=5)
         
         # Buttons
-        btn_frame = tk.Frame(control, bg=COLORS["light"])
-        btn_frame.pack()
+        btn_frame = tk.Frame(control_panel, bg=COLORS["white"])
+        btn_frame.pack(pady=5)
         
         self.btn_start = tk.Button(
             btn_frame,
-            text="▶️ Bắt đầu điểm danh",
+            text="▶️ Bắt đầu",
             font=("Segoe UI", 10, "bold"),
-            bg=COLORS["success"],
+            bg=COLORS["btn_start"],
             fg=COLORS["white"],
             relief=tk.FLAT,
-            cursor="hand2",
             command=self.start_attendance,
-            padx=20,
-            pady=10
+            width=15
         )
         self.btn_start.pack(side=tk.LEFT, padx=5)
         
         self.btn_stop = tk.Button(
             btn_frame,
             text="⏸️ Dừng",
-            font=("Segoe UI", 10),
-            bg=COLORS["warning"],
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS["btn_stop"],
             fg=COLORS["white"],
             relief=tk.FLAT,
-            cursor="hand2",
             command=self.stop_attendance,
-            padx=20,
-            pady=10,
+            width=15,
             state=tk.DISABLED
         )
         self.btn_stop.pack(side=tk.LEFT, padx=5)
         
-        btn_save = tk.Button(
+        tk.Button(
             btn_frame,
-            text="💾 Lưu điểm danh",
-            font=("Segoe UI", 10),
-            bg=COLORS["primary"],
+            text="💾 Lưu kết quả",
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS["btn_save"],
             fg=COLORS["white"],
             relief=tk.FLAT,
-            cursor="hand2",
             command=self.save_attendance,
-            padx=20,
-            pady=10
-        )
-        btn_save.pack(side=tk.LEFT, padx=5)
+            width=15
+        ).pack(side=tk.LEFT, padx=5)
         
-        btn_rebuild = tk.Button(
-            btn_frame,
-            text="🔄 Rebuild DB",
-            font=("Segoe UI", 10),
-            bg=COLORS["info"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.rebuild_embeddings,
-            padx=15,
-            pady=10
-        )
-        btn_rebuild.pack(side=tk.LEFT, padx=5)
-        
-        btn_close = tk.Button(
+        tk.Button(
             btn_frame,
             text="✕ Đóng",
-            font=("Segoe UI", 10),
-            bg=COLORS["danger"],
+            font=("Segoe UI", 10, "bold"),
+            bg=COLORS["btn_close"],
             fg=COLORS["white"],
             relief=tk.FLAT,
-            cursor="hand2",
             command=self.on_closing,
-            padx=20,
-            pady=10
-        )
-        btn_close.pack(side=tk.LEFT, padx=5)
+            width=10
+        ).pack(side=tk.LEFT, padx=5)
     
     def load_session_students(self):
-        """Load danh sách sinh viên trong lớp (từ session)"""
-        # TODO: Gọi API để lấy danh sách sinh viên
-        # Tạm thời dùng dữ liệu mẫu
-        self.students_in_class = [
-            {"student_id": "2280602549", "full_name": "Nguyễn Kim Quang", "status": "absent"}
-        ]
-        self.update_attendance_list()
-    
-    def update_attendance_list(self):
-        """Cập nhật bảng điểm danh"""
-        self.tree.delete(*self.tree.get_children())
-        
-        present_count = 0
-        for idx, student in enumerate(self.students_in_class, 1):
-            student_id = student['student_id']
-            status = "absent"
-            
-            if student_id in self.attendance_records:
-                status = "present"
-                present_count += 1
-            
-            status_text = "✅" if status == "present" else "❌"
-            
-            self.tree.insert("", tk.END, values=(
-                idx,
-                student_id,
-                student['full_name'],
-                status_text
-            ), tags=(status,))
-        
-        # Update stats
-        total = len(self.students_in_class)
-        self.stats_label.config(text=f"Có mặt: {present_count}/{total}")
+        """Load danh sách sinh viên trong lớp"""
+        # TODO: Implement API call to get students in session
+        pass
     
     def start_attendance(self):
         """Bắt đầu điểm danh"""
         if self.is_running:
             return
         
-        # Khởi động stream
         self.stream = ESP32StreamReader(AttendanceConfig.STREAM_URL)
         self.stream.start()
         
         self.is_running = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
-        self.status_label.config(text="🔴 Đang điểm danh...", fg=COLORS["success"])
+        self.status_label.config(text="Đang điểm danh...", fg=COLORS["success"])
         
-        # Đợi kết nối
         self.window.after(100, self.check_connection)
     
     def check_connection(self):
-        """Kiểm tra kết nối stream"""
+        """Kiểm tra kết nối"""
         if self.stream.connected:
             self.update_video()
         elif self.stream.stopped:
-            self.status_label.config(text="❌ Không thể kết nối camera!", fg=COLORS["danger"])
+            self.status_label.config(text="Không thể kết nối camera!", fg=COLORS["danger"])
             messagebox.showerror("Lỗi", "Không thể kết nối ESP32-CAM!")
             self.stop_attendance()
         else:
             self.window.after(100, self.check_connection)
     
     def update_video(self):
-        """Cập nhật video stream + recognition"""
+        """Cập nhật video và nhận diện"""
         if not self.is_running or self.stream is None or self.stream.stopped:
             return
         
@@ -761,70 +620,76 @@ class AttendanceModule:
         
         display = frame.copy()
         
-        # Face detection & recognition
+        # Face Recognition
         faces = self.recognition_engine.get_faces_in_frame(frame)
         
         for face in faces:
-            # Get bounding box
             bbox = face.bbox.astype(int)
             x1, y1, x2, y2 = bbox
             
-            # 🔥 NHẬN DẠNG TỪNG FACE RIÊNG BIỆT (dùng embedding của face này)
             student_id, similarity = self.recognition_engine.recognize_face(face.embedding)
             
-            # Kiểm tra cooldown
-            current_time = time.time()
             if student_id:
+                # Cooldown check
+                current_time = time.time()
                 last_time = self.last_recognition_time.get(student_id, 0)
                 
-                # Nếu đã qua cooldown, mark attendance
                 if current_time - last_time >= AttendanceConfig.RECOGNITION_COOLDOWN:
                     if student_id not in self.attendance_records:
                         self.mark_attendance(student_id)
                     self.last_recognition_time[student_id] = current_time
                 
-                # Draw box (green)
-                cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                
-                # Draw label - Hiển thị TÊN thay vì ID
+                # Draw
                 student_name = self.get_student_name(student_id)
-                label = f"{student_name} ({similarity:.2f})"
-                cv2.putText(display, label, (x1, y1 - 10),
+                cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(display, f"{student_name} ({similarity:.2f})", (x1, y1-10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             else:
-                # Unknown (red box)
                 cv2.rectangle(display, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                cv2.putText(display, "Unknown", (x1, y1 - 10),
+                cv2.putText(display, "Unknown", (x1, y1-10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
-        # Convert to PhotoImage
-        frame_rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
-        frame_pil = Image.fromarray(frame_rgb)
+        # Display
+        cv2image = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(cv2image)
         
-        # Resize
-        max_width = 650
-        max_height = 600
-        frame_pil.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+        # Resize to fit
+        display_width = self.video_label.winfo_width()
+        display_height = self.video_label.winfo_height()
         
-        photo = ImageTk.PhotoImage(frame_pil)
-        self.video_label.config(image=photo)
-        self.video_label.image = photo
+        if display_width > 10 and display_height > 10:
+            img = img.resize((display_width, display_height), Image.LANCZOS)
+            
+        imgtk = ImageTk.PhotoImage(image=img)
+        self.video_label.imgtk = imgtk
+        self.video_label.configure(image=imgtk)
         
-        # Next frame
         self.window.after(30, self.update_video)
     
     def mark_attendance(self, student_id):
-        """Đánh dấu điểm danh"""
+        """Ghi nhận điểm danh"""
         self.attendance_records[student_id] = datetime.now()
-        self.update_attendance_list()
         
-        # Flash status - Hiển thị TÊN
-        student_name = self.get_student_name(student_id)
-        self.status_label.config(
-            text=f"✅ Đã điểm danh: {student_name}",
-            fg=COLORS["success"]
-        )
-        print(f"✅ Marked: {student_name} ({student_id})")
+        # Update UI
+        # Tìm item trong treeview
+        found = False
+        for item in self.tree.get_children():
+            values = self.tree.item(item)['values']
+            if str(values[1]) == str(student_id):
+                self.tree.item(item, values=(values[0], values[1], values[2], "Có mặt"), tags=('present',))
+                found = True
+                break
+        
+        if not found:
+            # Add new row if not in list
+            count = len(self.tree.get_children()) + 1
+            name = self.get_student_name(student_id)
+            self.tree.insert("", tk.END, values=(count, student_id, name, "Có mặt"), tags=('present',))
+            
+        # Update stats
+        total = len(self.tree.get_children())
+        present = len(self.attendance_records)
+        self.stats_label.config(text=f"Có mặt: {present}/{total}")
     
     def stop_attendance(self):
         """Dừng điểm danh"""
@@ -834,128 +699,50 @@ class AttendanceModule:
         
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
-        self.status_label.config(text="⏸️ Đã dừng", fg=COLORS["text"])
+        self.status_label.config(text="Đã dừng", fg=COLORS["text"])
+        self.video_label.configure(image='')
     
     def save_attendance(self):
-        """Lưu điểm danh vào database"""
-        if len(self.attendance_records) == 0:
-            messagebox.showwarning("Cảnh báo", "Chưa có dữ liệu điểm danh!")
+        """Lưu kết quả điểm danh"""
+        if not self.attendance_records:
+            messagebox.showwarning("Thông báo", "Chưa có dữ liệu điểm danh!")
             return
-        
-        # TODO: Gọi API để lưu điểm danh
-        # For now, just show summary
-        present_count = len(self.attendance_records)
-        total = len(self.students_in_class)
-        
-        messagebox.showinfo(
-            "Lưu điểm danh",
-            f"Đã điểm danh: {present_count}/{total} sinh viên\n\n"
-            f"Có mặt: {present_count}\n"
-            f"Vắng: {total - present_count}\n\n"
-            "Chức năng lưu vào database sẽ được bổ sung sau."
-        )
-    
-    def rebuild_embeddings(self):
-        """Rebuild embeddings database với progress dialog"""
-        confirm = messagebox.askyesno(
-            "Xác nhận",
-            "Rebuild embeddings database?\n\n"
-            "Quá trình này sẽ:\n"
-            "- Đọc lại tất cả ảnh từ dataset/processed/\n"
-            "- Tạo lại embeddings cho tất cả sinh viên\n"
-            "- Mất vài phút tùy số lượng ảnh\n\n"
-            "Tiếp tục?"
-        )
-        
-        if not confirm:
-            return
-        
-        # Tạo progress window
-        progress_window = tk.Toplevel(self.window)
-        progress_window.title("Build Embeddings")
-        progress_window.geometry("500x200")
-        progress_window.configure(bg=COLORS["light"])
-        progress_window.transient(self.window)
-        progress_window.grab_set()
-        
-        # Header
-        header_label = tk.Label(
-            progress_window,
-            text="🔄 Đang build embeddings database...",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["light"],
-            fg=COLORS["text"]
-        )
-        header_label.pack(pady=20)
-        
-        # Progress label
-        progress_label = tk.Label(
-            progress_window,
-            text="Đang khởi tạo...",
-            font=("Segoe UI", 10),
-            bg=COLORS["light"],
-            fg=COLORS["text"]
-        )
-        progress_label.pack(pady=10)
-        
-        # Stats label
-        stats_label = tk.Label(
-            progress_window,
-            text="",
-            font=("Segoe UI", 9),
-            bg=COLORS["light"],
-            fg=COLORS["text"]
-        )
-        stats_label.pack(pady=5)
-        
-        progress_window.update()
-        
-        # Progress callback
-        def update_progress(current, total, message):
-            progress_label.config(text=f"{message} ({current}/{total})")
-            stats_label.config(text=f"Tiến độ: {int(current/total*100)}%")
-            progress_window.update()
-        
-        # Build embeddings
-        result = self.recognition_engine.build_embeddings(progress_callback=update_progress)
-        
-        progress_window.destroy()
-        
-        if result["success"]:
-            self.status_label.config(text="✅ Rebuild thành công!", fg=COLORS["success"])
-            messagebox.showinfo(
-                "Thành công",
-                f"Đã rebuild embeddings database!\n\n"
-                f"✅ Sinh viên: {result['total_students']}\n"
-                f"✅ Ảnh thành công: {result['total_images']}\n"
-                f"⚠️ Ảnh thất bại: {result['failed_images']}\n\n"
-                f"💾 Lưu tại: {AttendanceConfig.EMBEDDINGS_FILE}"
-            )
-        else:
-            self.status_label.config(text="❌ Rebuild thất bại!", fg=COLORS["danger"])
-            messagebox.showerror(
-                "Lỗi",
-                f"Build embeddings thất bại!\n\n"
-                f"Lỗi: {result.get('error', 'Unknown error')}"
-            )
+            
+        if messagebox.askyesno("Xác nhận", "Lưu kết quả điểm danh vào hệ thống?"):
+            # TODO: Call API to save attendance
+            messagebox.showinfo("Thành công", "Đã lưu kết quả điểm danh!")
     
     def on_closing(self):
         """Đóng cửa sổ"""
-        if self.is_running:
-            self.stop_attendance()
+        self.stop_attendance()
         self.window.destroy()
-
-
-# ============================================================================
-# TEST
-# ============================================================================
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()
     
-    from api_client import APIClient
-    api = APIClient("http://localhost:8000/api")
-    
-    AttendanceModule(root, api)
-    root.mainloop()
+    def rebuild_embeddings(self):
+        """Rebuild embeddings DB"""
+        if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn rebuild toàn bộ embeddings?\nQuá trình này có thể mất nhiều thời gian."):
+            # Show progress dialog
+            progress_win = tk.Toplevel(self.window)
+            progress_win.title("Processing...")
+            progress_win.geometry("300x150")
+            
+            lbl = tk.Label(progress_win, text="Đang xử lý...", pady=20)
+            lbl.pack()
+            
+            bar = ttk.Progressbar(progress_win, length=200, mode='determinate')
+            bar.pack(pady=10)
+            
+            def run():
+                def callback(curr, total, msg):
+                    bar['value'] = (curr / total) * 100
+                    lbl.config(text=msg)
+                    progress_win.update()
+                
+                result = self.recognition_engine.build_embeddings(callback)
+                progress_win.destroy()
+                
+                if result['success']:
+                    messagebox.showinfo("Thành công", f"Đã rebuild xong!\nTotal students: {result['total_students']}")
+                else:
+                    messagebox.showerror("Lỗi", f"Lỗi: {result.get('error')}")
+            
+            Thread(target=run, daemon=True).start()

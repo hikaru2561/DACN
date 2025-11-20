@@ -38,6 +38,8 @@ COLORS = {
     "text": "#2C3E50",
     "success": "#27AE60",
     "danger": "#E74C3C",
+    "btn_cancel": "#95A5A6",
+    "primary": "#3498DB",
 }
 
 
@@ -52,23 +54,37 @@ class StudentModuleNew:
         self.parent = parent
         self.api = api_client
         self.current_student = None  # Sinh viên đang được chọn
+        self.classes = [] # Danh sách lớp học
         
         # Create main window
         self.window = tk.Toplevel(parent)
         self.window.title("Quản lý thông tin sinh viên")
-        self.window.geometry("1400x750")
+        self.window.geometry("1400x780")
         self.window.configure(bg=COLORS["light"])
         
+        self.load_classes() # Load danh sách lớp trước khi tạo UI
         self.create_widgets()
         self.load_students()
-    
+        
+    def load_classes(self):
+        """Load danh sách lớp học từ API"""
+        try:
+            # Lấy danh sách lớp đang active
+            classes_data = self.api.get_classes(is_active=True)
+            # Chỉ lấy tên lớp để hiển thị trong combobox
+            self.classes = [c.get('class_name', '') for c in classes_data]
+            print(f"📋 Loaded {len(self.classes)} classes")
+        except Exception as e:
+            print(f"⚠️ Error loading classes: {e}")
+            self.classes = []
+
     def create_widgets(self):
         """Tạo giao diện"""
         # ============================================================
         # LEFT PANEL: THÔNG TIN SINH VIÊN (FORM)
         # ============================================================
         
-        left_panel = tk.Frame(self.window, bg=COLORS["white"], width=600)
+        left_panel = tk.Frame(self.window, bg=COLORS["white"], width=500)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
         left_panel.pack_propagate(False)
         
@@ -89,330 +105,104 @@ class StudentModuleNew:
         form_container = tk.Frame(left_panel, bg=COLORS["white"])
         form_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # === Row 1: ID Sinh viên ===
-        row1 = tk.Frame(form_container, bg=COLORS["white"])
-        row1.pack(fill=tk.X, pady=8)
+        # --- Helper function to create labeled entry ---
+        def create_entry(parent, label_text, width=None):
+            frame = tk.Frame(parent, bg=COLORS["white"])
+            frame.pack(fill=tk.X, pady=5)
+            
+            lbl = tk.Label(frame, text=label_text, font=("Segoe UI", 10), bg=COLORS["white"], width=12, anchor="w")
+            lbl.pack(side=tk.LEFT)
+            
+            entry = tk.Entry(frame, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1)
+            if width:
+                entry.config(width=width)
+                entry.pack(side=tk.LEFT, padx=(0, 10))
+            else:
+                entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            
+            return entry, frame
+
+        # === Row 1: ID & Tên ===
+        self.entry_id, _ = create_entry(form_container, "ID Sinh viên:")
+        self.entry_name, _ = create_entry(form_container, "Họ tên:")
         
-        tk.Label(
-            row1,
-            text="ID Sinh viên:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        # === Row 2: Lớp (Combobox) ===
+        row_class = tk.Frame(form_container, bg=COLORS["white"])
+        row_class.pack(fill=tk.X, pady=5)
+        tk.Label(row_class, text="Lớp học:", font=("Segoe UI", 10), bg=COLORS["white"], width=12, anchor="w").pack(side=tk.LEFT)
         
-        self.entry_id = tk.Entry(
-            row1,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1,
-            width=10
-        )
-        self.entry_id.pack(side=tk.LEFT, padx=(0, 20))
+        self.combo_class = ttk.Combobox(row_class, values=self.classes, font=("Segoe UI", 10), state="readonly")
+        self.combo_class.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        tk.Label(
-            row1,
-            text="Tên Sinh viên:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        # === Row 3: CMND/CCCD ===
+        self.entry_national_id, _ = create_entry(form_container, "CMND/CCCD:")
         
-        self.entry_name = tk.Entry(
-            row1,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_name.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # === Row 4: Giới tính & Ngày sinh ===
+        row_gender_dob = tk.Frame(form_container, bg=COLORS["white"])
+        row_gender_dob.pack(fill=tk.X, pady=5)
         
-        # === Row 2: Lớp học + CMND ===
-        row2 = tk.Frame(form_container, bg=COLORS["white"])
-        row2.pack(fill=tk.X, pady=8)
+        tk.Label(row_gender_dob, text="Giới tính:", font=("Segoe UI", 10), bg=COLORS["white"], width=12, anchor="w").pack(side=tk.LEFT)
         
-        tk.Label(
-            row2,
-            text="Lớp học:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
-        
-        self.entry_class = tk.Entry(
-            row2,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1,
-            width=15
-        )
-        self.entry_class.pack(side=tk.LEFT, padx=(0, 20))
-        
-        tk.Label(
-            row2,
-            text="CMND:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
-        
-        self.entry_cmnd = tk.Entry(
-            row2,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_cmnd.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        # === Row 3: Giới tính + Ngày sinh ===
-        row3 = tk.Frame(form_container, bg=COLORS["white"])
-        row3.pack(fill=tk.X, pady=8)
-        
-        tk.Label(
-            row3,
-            text="Giới tính:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
-        
-        gender_frame = tk.Frame(row3, bg=COLORS["white"])
-        gender_frame.pack(side=tk.LEFT, padx=(0, 20))
-        
+        gender_frame = tk.Frame(row_gender_dob, bg=COLORS["white"])
+        gender_frame.pack(side=tk.LEFT)
         self.var_gender = tk.StringVar(value="Nam")
-        tk.Radiobutton(
-            gender_frame,
-            text="Nam",
-            variable=self.var_gender,
-            value="Nam",
-            font=("Segoe UI", 9),
-            bg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(gender_frame, text="Nam", variable=self.var_gender, value="Nam", bg=COLORS["white"]).pack(side=tk.LEFT)
+        tk.Radiobutton(gender_frame, text="Nữ", variable=self.var_gender, value="Nữ", bg=COLORS["white"]).pack(side=tk.LEFT)
         
-        tk.Radiobutton(
-            gender_frame,
-            text="Nữ",
-            variable=self.var_gender,
-            value="Nữ",
-            font=("Segoe UI", 9),
-            bg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=5)
+        tk.Label(row_gender_dob, text="Ngày sinh:", font=("Segoe UI", 10), bg=COLORS["white"], width=10, anchor="e").pack(side=tk.LEFT, padx=(10, 5))
+        self.entry_dob = tk.Entry(row_gender_dob, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1, width=15)
+        self.entry_dob.pack(side=tk.LEFT)
         
-        tk.Label(
-            row3,
-            text="Ngày sinh:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        # === Row 5: Email & SĐT ===
+        self.entry_email, _ = create_entry(form_container, "Email:")
+        self.entry_phone, _ = create_entry(form_container, "SĐT:")
         
-        self.entry_dob = tk.Entry(
-            row3,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_dob.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # === Row 6: Địa chỉ ===
+        self.entry_address, _ = create_entry(form_container, "Địa chỉ:")
         
-        # === Row 4: Email + SĐT ===
-        row4 = tk.Frame(form_container, bg=COLORS["white"])
-        row4.pack(fill=tk.X, pady=8)
+        # === Row 7: Chuyên ngành & Năm học ===
+        self.entry_major, _ = create_entry(form_container, "Chuyên ngành:")
+        self.entry_academic_year, _ = create_entry(form_container, "Năm học:")
         
-        tk.Label(
-            row4,
-            text="Email:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        # === BUTTONS ===
+        btn_frame = tk.Frame(form_container, bg=COLORS["white"])
+        btn_frame.pack(fill=tk.X, pady=20)
         
-        self.entry_email = tk.Entry(
-            row4,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_email.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 20))
+        # Helper for buttons
+        def create_btn(parent, text, color, cmd):
+            return tk.Button(parent, text=text, font=("Segoe UI", 10, "bold"), bg=color, fg=COLORS["white"], 
+                             relief=tk.FLAT, cursor="hand2", command=cmd, width=10, pady=5)
+
+        center_btns = tk.Frame(btn_frame, bg=COLORS["white"])
+        center_btns.pack(expand=True)
         
-        tk.Label(
-            row4,
-            text="SĐT:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        self.btn_save = create_btn(center_btns, "Lưu", COLORS["btn_save"], self.save_student)
+        self.btn_save.pack(side=tk.LEFT, padx=5)
         
-        self.entry_phone = tk.Entry(
-            row4,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_phone.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.btn_edit = create_btn(center_btns, "Sửa", COLORS["btn_edit"], self.edit_student)
+        self.btn_edit.pack(side=tk.LEFT, padx=5)
         
-        # === Row 5: Địa chỉ ===
-        row5 = tk.Frame(form_container, bg=COLORS["white"])
-        row5.pack(fill=tk.X, pady=8)
+        self.btn_delete = create_btn(center_btns, "Xóa", COLORS["btn_delete"], self.delete_student)
+        self.btn_delete.pack(side=tk.LEFT, padx=5)
         
-        tk.Label(
-            row5,
-            text="Địa chỉ:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"],
-            width=15,
-            anchor="w"
-        ).pack(side=tk.LEFT)
+        self.btn_new = create_btn(center_btns, "Làm mới", COLORS["btn_new"], self.clear_form)
+        self.btn_new.pack(side=tk.LEFT, padx=5)
         
-        self.entry_address = tk.Entry(
-            row5,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_address.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # === EXTRA BUTTONS ===
+        extra_btns = tk.Frame(form_container, bg=COLORS["white"])
+        extra_btns.pack(fill=tk.X, pady=10)
+        center_extra = tk.Frame(extra_btns, bg=COLORS["white"])
+        center_extra.pack(expand=True)
         
-        # === BUTTONS ROW 1: Lưu, Sửa, Xóa, Làm mới ===
-        btn_row1 = tk.Frame(form_container, bg=COLORS["white"])
-        btn_row1.pack(fill=tk.X, pady=20)
+        self.btn_capture = tk.Button(center_extra, text="📷 Lấy ảnh", font=("Segoe UI", 11, "bold"), bg=COLORS["btn_capture"], fg="white", relief=tk.FLAT, command=self.capture_photos, width=15, pady=5)
+        self.btn_capture.pack(side=tk.LEFT, padx=5)
         
-        # Center buttons
-        btn_center = tk.Frame(btn_row1, bg=COLORS["white"])
-        btn_center.pack(expand=True)
-        
-        self.btn_save = tk.Button(
-            btn_center,
-            text="Lưu",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_save"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.save_student,
-            width=10,
-            height=1,
-            borderwidth=0,
-            activebackground="#3498DB",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_save.pack(side=tk.LEFT, padx=8)
-        
-        self.btn_edit = tk.Button(
-            btn_center,
-            text="Sửa",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_edit"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.edit_student,
-            width=10,
-            height=1,
-            borderwidth=0,
-            activebackground="#E67E22",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_edit.pack(side=tk.LEFT, padx=8)
-        
-        self.btn_delete = tk.Button(
-            btn_center,
-            text="Xóa",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_delete"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.delete_student,
-            width=10,
-            height=1,
-            borderwidth=0,
-            activebackground="#C0392B",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_delete.pack(side=tk.LEFT, padx=8)
-        
-        self.btn_new = tk.Button(
-            btn_center,
-            text="Làm mới",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_new"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.clear_form,
-            width=10,
-            height=1,
-            borderwidth=0,
-            activebackground="#27AE60",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_new.pack(side=tk.LEFT, padx=8)
-        
-        # === BUTTONS ROW 2: Lấy ảnh, Training Data ===
-        btn_row2 = tk.Frame(form_container, bg=COLORS["white"])
-        btn_row2.pack(fill=tk.X, pady=10)
-        
-        # Center buttons
-        btn_center2 = tk.Frame(btn_row2, bg=COLORS["white"])
-        btn_center2.pack(expand=True)
-        
-        self.btn_capture = tk.Button(
-            btn_center2,
-            text="📷 Lấy ảnh sinh viên",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["btn_capture"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.capture_photos,
-            width=22,
-            height=2,
-            borderwidth=0,
-            activebackground="#3498DB",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_capture.pack(side=tk.LEFT, padx=10)
-        
-        self.btn_training = tk.Button(
-            btn_center2,
-            text="🔄 Training Data",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["btn_training"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.training_data,
-            width=22,
-            height=2,
-            borderwidth=0,
-            activebackground="#16A085",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_training.pack(side=tk.LEFT, padx=10)
-        
-        self.btn_view_images = tk.Button(
-            btn_center2,
-            text="🖼️ Xem ảnh",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["btn_edit"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.view_student_images,
-            width=22,
-            height=2,
-            borderwidth=0,
-            activebackground="#E67E22",
-            activeforeground=COLORS["white"]
-        )
-        self.btn_view_images.pack(side=tk.LEFT, padx=10)
-        
+        self.btn_training = tk.Button(center_extra, text="🔄 Training", font=("Segoe UI", 11, "bold"), bg=COLORS["btn_training"], fg="white", relief=tk.FLAT, command=self.training_data, width=15, pady=5)
+        self.btn_training.pack(side=tk.LEFT, padx=5)
+
+        self.btn_view_images = tk.Button(center_extra, text="🖼️ Xem ảnh", font=("Segoe UI", 11, "bold"), bg=COLORS["btn_edit"], fg="white", relief=tk.FLAT, command=self.view_student_images, width=15, pady=5)
+        self.btn_view_images.pack(side=tk.LEFT, padx=5)
+
         # ============================================================
         # RIGHT PANEL: HỆ THỐNG TÌM KIẾM + TABLE
         # ============================================================
@@ -420,382 +210,232 @@ class StudentModuleNew:
         right_panel = tk.Frame(self.window, bg=COLORS["white"])
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Header: HỆ THỐNG TÌM KIẾM
+        # Header
         search_header = tk.Frame(right_panel, bg=COLORS["table_header"], height=50)
         search_header.pack(fill=tk.X)
         search_header.pack_propagate(False)
+        tk.Label(search_header, text="Danh sách sinh viên", font=("Segoe UI", 14, "bold"), bg=COLORS["table_header"], fg=COLORS["white"]).pack(side=tk.LEFT, padx=15, pady=12)
         
-        tk.Label(
-            search_header,
-            text="Hệ thống tìm kiếm",
-            font=("Segoe UI", 14, "bold"),
-            bg=COLORS["table_header"],
-            fg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=15, pady=12)
-        
-        # Search controls
+        # Search
         search_controls = tk.Frame(right_panel, bg=COLORS["white"])
         search_controls.pack(fill=tk.X, padx=15, pady=15)
         
-        tk.Label(
-            search_controls,
-            text="Tìm kiếm theo:",
-            font=("Segoe UI", 10),
-            bg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.search_type = ttk.Combobox(
-            search_controls,
-            values=["ID Sinh viên", "Tên sinh viên"],
-            state="readonly",
-            font=("Segoe UI", 9),
-            width=15
-        )
+        self.search_type = ttk.Combobox(search_controls, values=["ID Sinh viên", "Tên sinh viên"], state="readonly", width=15)
         self.search_type.set("ID Sinh viên")
         self.search_type.pack(side=tk.LEFT, padx=(0, 10))
         
-        self.search_entry = tk.Entry(
-            search_controls,
-            font=("Segoe UI", 10),
-            relief=tk.SOLID,
-            borderwidth=1,
-            width=30
-        )
+        self.search_entry = tk.Entry(search_controls, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1, width=30)
         self.search_entry.pack(side=tk.LEFT, padx=(0, 10))
         self.search_entry.bind('<KeyRelease>', lambda e: self.search_students())
         
-        tk.Button(
-            search_controls,
-            text="Tìm kiếm",
-            font=("Segoe UI", 10),
-            bg=COLORS["btn_save"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.search_students,
-            width=10
-        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(search_controls, text="Tìm kiếm", bg=COLORS["btn_save"], fg="white", relief=tk.FLAT, command=self.search_students).pack(side=tk.LEFT, padx=5)
+        tk.Button(search_controls, text="Tất cả", bg=COLORS["btn_new"], fg="white", relief=tk.FLAT, command=self.load_students).pack(side=tk.LEFT, padx=5)
         
-        tk.Button(
-            search_controls,
-            text="Xem tất cả",
-            font=("Segoe UI", 10),
-            bg=COLORS["btn_new"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.load_students,
-            width=10
-        ).pack(side=tk.LEFT, padx=5)
-        
-        # Table container
+        # Table
         table_container = tk.Frame(right_panel, bg=COLORS["white"])
         table_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
         
-        # Treeview with scrollbar
         tree_scroll_y = ttk.Scrollbar(table_container, orient=tk.VERTICAL)
         tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
-        
         tree_scroll_x = ttk.Scrollbar(table_container, orient=tk.HORIZONTAL)
         tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Define columns
-        columns = ("STT", "ID","Họ tên", "Chuyên ngành", "Chương trình học", "Năm học", "Học kì",  "Lớp biên chế")
-        
-        self.tree = ttk.Treeview(
-            table_container,
-            columns=columns,
-            show="headings",
-            yscrollcommand=tree_scroll_y.set,
-            xscrollcommand=tree_scroll_x.set,
-            height=20
-        )
+        # Updated Columns
+        columns = ("STT", "ID", "Họ tên", "Lớp", "CMND", "SĐT", "Chuyên ngành", "Năm học")
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", yscrollcommand=tree_scroll_y.set, xscrollcommand=tree_scroll_x.set, height=20)
         
         tree_scroll_y.config(command=self.tree.yview)
         tree_scroll_x.config(command=self.tree.xview)
         
-        # Column headers
-        self.tree.heading("STT", text="STT")
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Họ tên", text="Họ tên")
-        self.tree.heading("Chuyên ngành", text="Chuyên ngành")
-        self.tree.heading("Chương trình học", text="Chương trình học")
-        self.tree.heading("Năm học", text="Năm học")
-        self.tree.heading("Học kì", text="Học kì")
-        self.tree.heading("Lớp biên chế", text="Lớp biên chế")
-        
-        # Column widths
+        # Headings
+        for col in columns:
+            self.tree.heading(col, text=col)
+            
+        # Widths
         self.tree.column("STT", width=40, anchor=tk.CENTER)
-        self.tree.column("ID", width=100, anchor=tk.CENTER)
+        self.tree.column("ID", width=80, anchor=tk.CENTER)
         self.tree.column("Họ tên", width=150)
-        self.tree.column("Chuyên ngành", width=100, anchor=tk.CENTER)
-        self.tree.column("Chương trình học", width=120)
+        self.tree.column("Lớp", width=80, anchor=tk.CENTER)
+        self.tree.column("CMND", width=100)
+        self.tree.column("SĐT", width=100)
+        self.tree.column("Chuyên ngành", width=100)
         self.tree.column("Năm học", width=80, anchor=tk.CENTER)
-        self.tree.column("Học kì", width=80, anchor=tk.CENTER)
-        self.tree.column("Lớp biên chế", width=100)
         
         self.tree.pack(fill=tk.BOTH, expand=True)
-        
-        # Bind click event
         self.tree.bind('<ButtonRelease-1>', self.on_tree_select)
-        
-        # Alternating row colors
         self.tree.tag_configure('evenrow', background='#F8F9FA')
         self.tree.tag_configure('oddrow', background='#FFFFFF')
-    
+
     def load_students(self):
         """Load tất cả sinh viên"""
-        # Clear table
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         try:
             students = self.api.get_students()
-            
-            for idx, student in enumerate(students, 1):
+            for idx, s in enumerate(students, 1):
                 tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
-                
                 self.tree.insert("", tk.END, values=(
-                    idx,                                                    # STT
-                    student.get('student_id', ''),                          # ID
-                    student.get('full_name', ''),                           # Họ tên (FULL NAME)
-                    "IT",                                                   # Chuyên ngành (placeholder)
-                    "Chính quy",                                            # Chương trình học
-                    "2020-21",                                              # Năm học
-                    "Học kì I",                                             # Học kì
-                    student.get('class_id', 'D12CNPM1')                     # Lớp biên chế
+                    idx,
+                    s.get('student_id', ''),
+                    s.get('full_name', ''),
+                    s.get('class_name', ''), 
+                    s.get('national_id', ''),
+                    s.get('phone', ''),
+                    s.get('major', ''),
+                    s.get('academic_year', '')
                 ), tags=(tag,))
-        
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể tải danh sách sinh viên:\n{str(e)}")
-    
+
     def search_students(self):
         """Tìm kiếm sinh viên"""
-        search_text = self.search_entry.get().strip()
-        
+        search_text = self.search_entry.get().strip().lower()
         if not search_text:
             self.load_students()
             return
-        
-        # Clear table
+            
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
+            
         try:
             students = self.api.get_students()
             search_type = self.search_type.get()
             
             filtered = []
-            for student in students:
-                if search_type == "ID Sinh viên":
-                    if search_text.lower() in student.get('student_id', '').lower():
-                        filtered.append(student)
-                else:  # Tên sinh viên
-                    if search_text.lower() in student.get('full_name', '').lower():
-                        filtered.append(student)
+            for s in students:
+                val = s.get('student_id', '') if search_type == "ID Sinh viên" else s.get('full_name', '')
+                if search_text in str(val).lower():
+                    filtered.append(s)
             
-            for idx, student in enumerate(filtered, 1):
+            for idx, s in enumerate(filtered, 1):
                 tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
-                
                 self.tree.insert("", tk.END, values=(
-                    idx,                                                    # STT
-                    student.get('student_id', ''),                          # ID
-                    student.get('full_name', ''),                           # Họ tên (FULL NAME)
-                    "IT",                                                   # Chuyên ngành
-                    "Chính quy",                                            # Chương trình học
-                    "2020-21",                                              # Năm học
-                    "Học kì I",                                             # Học kì
-                    student.get('class_id', 'D12CNPM1')                     # Lớp biên chế
+                    idx,
+                    s.get('student_id', ''),
+                    s.get('full_name', ''),
+                    s.get('class_name', ''),
+                    s.get('national_id', ''),
+                    s.get('phone', ''),
+                    s.get('major', ''),
+                    s.get('academic_year', '')
                 ), tags=(tag,))
-        
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi tìm kiếm:\n{str(e)}")
-    
+            print(f"Search error: {e}")
+
     def on_tree_select(self, event):
-        """Khi click vào sinh viên trong bảng → Load thông tin vào form"""
+        """Khi click vào sinh viên trong bảng"""
         selected = self.tree.selection()
-        if not selected:
-            return
+        if not selected: return
         
         item = self.tree.item(selected[0])
         values = item['values']
+        if len(values) < 2: return
         
-        if len(values) < 2:
-            return
-        
-        # Get student_id from table (column index 1)
         student_id = str(values[1])
-        
-        print(f"🔍 Selected student ID: {student_id}")  # Debug
-        
         try:
-            # Fetch full student data from API
             students = self.api.get_students()
             student = next((s for s in students if str(s.get('student_id', '')) == student_id), None)
-            
             if student:
-                print(f"✅ Found student: {student.get('full_name')}")  # Debug
-                # IMPORTANT: Set current_student BEFORE populating form
                 self.current_student = student
                 self.populate_form(student)
-                print(f"✅ current_student set to: {self.current_student.get('student_id')}")  # Debug
-            else:
-                print(f"❌ Student not found: {student_id}")  # Debug
-                self.current_student = None
-        
         except Exception as e:
-            print(f"❌ Error loading student: {e}")  # Debug
-            import traceback
-            traceback.print_exc()
-            self.current_student = None
-    
+            print(f"Error selecting student: {e}")
+
     def populate_form(self, student):
-        """Điền thông tin sinh viên vào form"""
-        # Clear form first (but DON'T clear current_student)
+        """Điền thông tin vào form"""
         self.clear_form_fields_only()
-        
         try:
-            # ID Sinh viên
-            if student.get('student_id'):
-                self.entry_id.delete(0, tk.END)
-                self.entry_id.insert(0, str(student['student_id']))
+            self.entry_id.insert(0, str(student.get('student_id', '')))
+            self.entry_name.insert(0, str(student.get('full_name', '')))
+            self.combo_class.set(str(student.get('class_name', '')))
+            self.entry_national_id.insert(0, str(student.get('national_id', '')))
+            self.entry_dob.insert(0, str(student.get('date_of_birth', '')))
+            self.entry_email.insert(0, str(student.get('email', '')))
+            self.entry_phone.insert(0, str(student.get('phone', '')))
+            self.entry_address.insert(0, str(student.get('address', '')))
+            self.entry_major.insert(0, str(student.get('major', '')))
+            self.entry_academic_year.insert(0, str(student.get('academic_year', '')))
             
-            # Tên sinh viên
-            if student.get('full_name'):
-                self.entry_name.delete(0, tk.END)
-                self.entry_name.insert(0, str(student['full_name']))
-            
-            # Lớp học
-            if student.get('class_id'):
-                self.entry_class.delete(0, tk.END)
-                self.entry_class.insert(0, str(student['class_id']))
-            
-            # Email
-            if student.get('email'):
-                self.entry_email.delete(0, tk.END)
-                self.entry_email.insert(0, str(student['email']))
-            
-            # Phone
-            if student.get('phone'):
-                self.entry_phone.delete(0, tk.END)
-                self.entry_phone.insert(0, str(student['phone']))
-            
-            # Gender
             gender = student.get('gender', 'Nam')
             self.var_gender.set(gender if gender else 'Nam')
-            
-            # Date of birth
-            dob = student.get('date_of_birth')
-            if dob:
-                self.entry_dob.delete(0, tk.END)
-                self.entry_dob.insert(0, str(dob))
-            
-            # Address (placeholder - not in database)
-            # self.entry_address.delete(0, tk.END)
-            # self.entry_address.insert(0, '')
-            
-            # CMND (placeholder - not in database)
-            # self.entry_cmnd.delete(0, tk.END)
-            # self.entry_cmnd.insert(0, '')
-            
-            print(f"✅ Form populated for: {student.get('full_name')}")
-            
         except Exception as e:
-            print(f"❌ Error in populate_form: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
-    
+            print(f"Error populating form: {e}")
+
     def clear_form_fields_only(self):
-        """Xóa các field trong form (KHÔNG xóa current_student)"""
-        try:
-            self.entry_id.delete(0, tk.END)
-            self.entry_name.delete(0, tk.END)
-            self.entry_class.delete(0, tk.END)
-            self.entry_cmnd.delete(0, tk.END)
-            self.entry_dob.delete(0, tk.END)
-            self.entry_email.delete(0, tk.END)
-            self.entry_phone.delete(0, tk.END)
-            self.entry_address.delete(0, tk.END)
-            self.var_gender.set("Nam")
-        except Exception as e:
-            print(f"⚠️ Error clearing form fields: {e}")
-    
+        """Xóa các field"""
+        self.entry_id.delete(0, tk.END)
+        self.entry_name.delete(0, tk.END)
+        self.combo_class.set('')
+        self.entry_national_id.delete(0, tk.END)
+        self.entry_dob.delete(0, tk.END)
+        self.entry_email.delete(0, tk.END)
+        self.entry_phone.delete(0, tk.END)
+        self.entry_address.delete(0, tk.END)
+        self.entry_major.delete(0, tk.END)
+        self.entry_academic_year.delete(0, tk.END)
+        self.var_gender.set("Nam")
+
     def clear_form(self):
-        """Xóa toàn bộ form và reset current_student"""
-        try:
-            self.clear_form_fields_only()
-            self.current_student = None
-            print("✅ Form cleared and current_student reset")
-        except Exception as e:
-            print(f"⚠️ Error in clear_form: {e}")
-    
+        self.clear_form_fields_only()
+        self.current_student = None
+
     def save_student(self):
-        """Lưu/Thêm mới sinh viên"""
-        # Validate
+        """Lưu sinh viên"""
         student_id = self.entry_id.get().strip()
         full_name = self.entry_name.get().strip()
         
         if not student_id or not full_name:
             messagebox.showwarning("Cảnh báo", "Vui lòng nhập ID và Tên sinh viên!")
             return
-        
-        # Prepare data
+            
         data = {
             "student_id": student_id,
             "full_name": full_name,
+            "class_name": self.combo_class.get().strip() or None,
+            "national_id": self.entry_national_id.get().strip() or None,
             "gender": self.var_gender.get(),
             "date_of_birth": self.entry_dob.get().strip() or None,
             "email": self.entry_email.get().strip() or None,
             "phone": self.entry_phone.get().strip() or None,
-            "class_id": self.entry_class.get().strip() or None,
+            "address": self.entry_address.get().strip() or None,
+            "major": self.entry_major.get().strip() or None,
+            "academic_year": self.entry_academic_year.get().strip() or None
         }
         
         try:
             if self.current_student:
-                # Update existing
                 self.api.update_student(student_id, data)
-                messagebox.showinfo("Thành công", "Cập nhật sinh viên thành công!")
+                messagebox.showinfo("Thành công", "Cập nhật thành công!")
             else:
-                # Create new
                 self.api.create_student(data)
-                messagebox.showinfo("Thành công", "Thêm sinh viên thành công!")
-            
+                messagebox.showinfo("Thành công", "Thêm mới thành công!")
             self.load_students()
             self.clear_form()
-        
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Không thể lưu sinh viên:\n{str(e)}")
-    
+            messagebox.showerror("Lỗi", f"Không thể lưu:\n{str(e)}")
+
     def edit_student(self):
-        """Sửa sinh viên (tương tự save)"""
         if not self.current_student:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn sinh viên cần sửa!")
+            messagebox.showwarning("Cảnh báo", "Chọn sinh viên cần sửa!")
             return
-        
         self.save_student()
-    
+
     def delete_student(self):
-        """Xóa sinh viên"""
         if not self.current_student:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn sinh viên cần xóa!")
+            messagebox.showwarning("Cảnh báo", "Chọn sinh viên cần xóa!")
             return
         
-        student_id = self.current_student['student_id']
-        confirm = messagebox.askyesno(
-            "Xác nhận",
-            f"Bạn có chắc muốn xóa sinh viên {student_id}?"
-        )
-        
-        if confirm:
+        sid = self.current_student['student_id']
+        if messagebox.askyesno("Xác nhận", f"Xóa sinh viên {sid}?"):
             try:
-                self.api.delete_student(student_id)
-                messagebox.showinfo("Thành công", "Xóa sinh viên thành công!")
+                self.api.delete_student(sid)
+                messagebox.showinfo("Thành công", "Đã xóa!")
                 self.load_students()
                 self.clear_form()
             except Exception as e:
-                messagebox.showerror("Lỗi", f"Không thể xóa sinh viên:\n{str(e)}")
-    
+                messagebox.showerror("Lỗi", f"Không thể xóa:\n{str(e)}")
+
     def capture_photos(self):
         """Chụp ảnh khuôn mặt cho sinh viên"""
         if not self.current_student:
@@ -828,11 +468,7 @@ class StudentModuleNew:
             messagebox.showerror("Lỗi", f"Không thể mở camera:\n{str(e)}")
     
     def on_capture_complete(self, student_id):
-        """Callback khi chụp ảnh hoàn thành - Tự động extract embeddings
-        
-        Args:
-            student_id: ID sinh viên vừa chụp xong
-        """
+        """Callback khi chụp ảnh hoàn thành - Tự động extract embeddings"""
         print(f"\n🎯 Capture complete for {student_id}. Starting embedding extraction...")
         
         try:
@@ -1059,10 +695,9 @@ class StudentModuleNew:
         full_name = self.current_student.get('full_name', 'Unknown')
         
         # Đường dẫn thư mục ảnh sinh viên
-        student_folder = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'dataset', 'processed', student_id
-        )
+        # desktop -> attendance_system -> DACN
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        student_folder = os.path.join(base_dir, 'dataset', 'processed', student_id)
         
         if not os.path.exists(student_folder):
             messagebox.showinfo(
@@ -1206,7 +841,10 @@ class ImageViewerWindow:
     
     def _on_mousewheel(self, event):
         """Scroll với mouse wheel"""
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        try:
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        except Exception:
+            pass
     
     def load_images(self):
         """Load và hiển thị ảnh dạng grid"""

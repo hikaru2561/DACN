@@ -32,8 +32,8 @@ class SessionSelectionWindow:
         self.window.title("Chọn buổi học để điểm danh")
         self.window.geometry("1400x800")
         self.window.configure(bg=COLORS["light"])
-        self.window.transient(parent)
-        self.window.grab_set()
+        # self.window.transient(parent)  # Removed to enable minimize/maximize
+        # self.window.grab_set()         # Removed to allow interaction with other windows if needed
         
         self.create_ui()
         self.load_today_sessions()

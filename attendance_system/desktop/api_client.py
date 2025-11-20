@@ -261,6 +261,32 @@ class APIClient:
         result = self._get("/api/cameras", params=params)
         return result if result else []
 
+    def get_camera(self, device_id: int) -> Optional[Dict]:
+        """Lấy thông tin một camera"""
+        return self._get(f"/api/cameras/{device_id}")
+    
+    def create_camera(self, camera_data: dict) -> Optional[Dict]:
+        """Tạo camera mới"""
+        return self._post("/api/cameras", camera_data)
+    
+    def update_camera(self, device_id: int, camera_data: dict) -> Optional[Dict]:
+        """Cập nhật camera"""
+        return self._put(f"/api/cameras/{device_id}", camera_data)
+    
+    def delete_camera(self, device_id: int) -> bool:
+        """Xóa camera"""
+        result = self._delete(f"/api/cameras/{device_id}")
+        return result is not None
+    
+    # ========================================================================
+    # REPORTS
+    # ========================================================================
+    
+    def get_attendance_stats(self) -> List[Dict]:
+        """Lấy thống kê điểm danh"""
+        result = self._get("/api/reports/attendance-stats")
+        return result if result else []
+
 
 # ============================================================================
 # TEST
@@ -317,6 +343,13 @@ if __name__ == "__main__":
     print(f"✅ Found {len(cameras)} active cameras")
     for c in cameras[:3]:
         print(f"   - {c['device_id']}: {c['device_name']}")
+    
+    # Get reports
+    print("\n7️⃣ Get Reports...")
+    stats = client.get_attendance_stats()
+    print(f"✅ Found {len(stats)} stats records")
+    for s in stats[:3]:
+        print(f"   - {s['class_name']}: {s['attendance_rate']}%")
     
     print("\n" + "=" * 80)
     print("✅ All API tests passed!")

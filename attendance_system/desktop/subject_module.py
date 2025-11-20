@@ -13,23 +13,20 @@ import re
 # ============================================================================
 
 COLORS = {
-    "primary": "#2C3E50",
-    "secondary": "#34495E", 
+    "form_header": "#F39C12", # Orange for Subjects
+    "table_header": "#3498DB",
+    "btn_save": "#2980B9",
+    "btn_edit": "#F39C12",
+    "btn_delete": "#C0392B",
+    "btn_new": "#27AE60",
+    "white": "#FFFFFF",
+    "light": "#F8F9FA",
+    "border": "#BDC3C7",
+    "text": "#2C3E50",
     "success": "#27AE60",
     "danger": "#E74C3C",
-    "warning": "#F39C12",
-    "info": "#3498DB",
-    "light": "#ECF0F1",
-    "dark": "#2C3E50",
-    "white": "#FFFFFF",
-    "text": "#2C3E50",
-    
-    # Buttons
-    "btn_save": "#3498DB",
-    "btn_edit": "#F39C12", 
-    "btn_delete": "#E74C3C",
-    "btn_new": "#27AE60",
     "btn_cancel": "#95A5A6",
+    "primary": "#3498DB",
 }
 
 # ============================================================================
@@ -39,9 +36,9 @@ COLORS = {
 class SubjectManagementWindow:
     """Cửa sổ quản lý môn học"""
     
-    def __init__(self, parent):
+    def __init__(self, parent, api_client):
         self.parent = parent
-        self.api = APIClient()
+        self.api = api_client
         self.current_subject = None
         
         # Tạo window
@@ -49,7 +46,9 @@ class SubjectManagementWindow:
         self.window.title("Quản lý Môn học")
         self.window.geometry("1400x800")
         self.window.configure(bg=COLORS["light"])
-        self.window.transient(parent)
+        
+        # Remove transient to allow minimize/maximize
+        # self.window.transient(parent)
         
         self.create_ui()
         self.load_subjects()
@@ -57,288 +56,124 @@ class SubjectManagementWindow:
     def create_ui(self):
         """Tạo giao diện"""
         # ============================================================
-        # HEADER
-        # ============================================================
-        header = tk.Frame(self.window, bg=COLORS["primary"], height=80)
-        header.pack(fill=tk.X)
-        header.pack_propagate(False)
-        
-        tk.Label(
-            header,
-            text="📚 QUẢN LÝ MÔN HỌC",
-            font=("Segoe UI", 20, "bold"),
-            bg=COLORS["primary"],
-            fg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=30, pady=20)
-        
-        # ============================================================
-        # MAIN CONTAINER - 2 PANELS
-        # ============================================================
-        main_container = tk.Frame(self.window, bg=COLORS["light"])
-        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        # ============================================================
         # LEFT PANEL: FORM NHẬP LIỆU
         # ============================================================
-        left_panel = tk.Frame(main_container, bg=COLORS["white"], width=500)
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10))
+        left_panel = tk.Frame(self.window, bg=COLORS["white"], width=450)
+        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
         left_panel.pack_propagate(False)
         
-        # Form Header
-        form_header = tk.Frame(left_panel, bg="#3498DB", height=50)
-        form_header.pack(fill=tk.X)
-        form_header.pack_propagate(False)
+        # Header
+        header_frame = tk.Frame(left_panel, bg=COLORS["form_header"], height=50)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
         
         tk.Label(
-            form_header,
-            text="📝 Thông tin môn học",
+            header_frame,
+            text="Thông tin môn học",
             font=("Segoe UI", 14, "bold"),
-            bg="#3498DB",
+            bg=COLORS["form_header"],
             fg=COLORS["white"]
         ).pack(pady=12)
         
-        # Form Container với scrollbar
+        # Form Container
         form_container = tk.Frame(left_panel, bg=COLORS["white"])
-        form_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        form_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # === MÃ MÔN HỌC ===
-        tk.Label(
-            form_container,
-            text="Mã môn học *",
-            font=("Segoe UI", 10, "bold"),
-            bg=COLORS["white"],
-            fg=COLORS["text"],
-            anchor="w"
-        ).pack(fill=tk.X, pady=(10, 5))
+        # --- Helper function to create labeled entry ---
+        def create_entry(parent, label_text, default_val=""):
+            frame = tk.Frame(parent, bg=COLORS["white"])
+            frame.pack(fill=tk.X, pady=5)
+            
+            lbl = tk.Label(frame, text=label_text, font=("Segoe UI", 10), bg=COLORS["white"], width=12, anchor="w")
+            lbl.pack(side=tk.LEFT)
+            
+            entry = tk.Entry(frame, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            if default_val:
+                entry.insert(0, default_val)
+            return entry
+
+        # === Fields ===
+        self.entry_subject_id = create_entry(form_container, "Mã môn *:")
+        self.entry_subject_name = create_entry(form_container, "Tên môn *:")
+        self.entry_credits = create_entry(form_container, "Số tín chỉ *:", "3")
         
-        self.entry_subject_id = tk.Entry(
-            form_container,
-            font=("Segoe UI", 11),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_subject_id.pack(fill=tk.X, ipady=8)
-        
-        # === TÊN MÔN HỌC ===
-        tk.Label(
-            form_container,
-            text="Tên môn học *",
-            font=("Segoe UI", 10, "bold"),
-            bg=COLORS["white"],
-            fg=COLORS["text"],
-            anchor="w"
-        ).pack(fill=tk.X, pady=(15, 5))
-        
-        self.entry_subject_name = tk.Entry(
-            form_container,
-            font=("Segoe UI", 11),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_subject_name.pack(fill=tk.X, ipady=8)
-        
-        # === SỐ TÍN CHỈ ===
-        tk.Label(
-            form_container,
-            text="Số tín chỉ *",
-            font=("Segoe UI", 10, "bold"),
-            bg=COLORS["white"],
-            fg=COLORS["text"],
-            anchor="w"
-        ).pack(fill=tk.X, pady=(15, 5))
-        
-        self.entry_credits = tk.Entry(
-            form_container,
-            font=("Segoe UI", 11),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_credits.pack(fill=tk.X, ipady=8)
-        self.entry_credits.insert(0, "3")  # Default value
-        
-        # === MÔ TẢ ===
-        tk.Label(
-            form_container,
-            text="Mô tả",
-            font=("Segoe UI", 10, "bold"),
-            bg=COLORS["white"],
-            fg=COLORS["text"],
-            anchor="w"
-        ).pack(fill=tk.X, pady=(15, 5))
-        
-        self.text_description = tk.Text(
-            form_container,
-            font=("Segoe UI", 11),
-            relief=tk.SOLID,
-            borderwidth=1,
-            height=5,
-            wrap=tk.WORD
-        )
+        # Mô tả (Text area)
+        tk.Label(form_container, text="Mô tả:", font=("Segoe UI", 10), bg=COLORS["white"], anchor="w").pack(fill=tk.X, pady=(10, 5))
+        self.text_description = tk.Text(form_container, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1, height=5)
         self.text_description.pack(fill=tk.X)
         
-        # === TRẠNG THÁI ===
-        tk.Label(
-            form_container,
-            text="Trạng thái",
-            font=("Segoe UI", 10, "bold"),
-            bg=COLORS["white"],
-            fg=COLORS["text"],
-            anchor="w"
-        ).pack(fill=tk.X, pady=(15, 5))
+        # === Trạng thái ===
+        status_frame = tk.Frame(form_container, bg=COLORS["white"])
+        status_frame.pack(fill=tk.X, pady=10)
+        tk.Label(status_frame, text="Trạng thái:", font=("Segoe UI", 10), bg=COLORS["white"], width=12, anchor="w").pack(side=tk.LEFT)
         
         self.var_active = tk.BooleanVar(value=True)
         tk.Checkbutton(
-            form_container,
+            status_frame,
             text="Đang hoạt động",
             variable=self.var_active,
             font=("Segoe UI", 10),
             bg=COLORS["white"]
-        ).pack(anchor="w")
+        ).pack(side=tk.LEFT)
         
         # === BUTTONS ===
         btn_frame = tk.Frame(form_container, bg=COLORS["white"])
-        btn_frame.pack(fill=tk.X, pady=30)
+        btn_frame.pack(fill=tk.X, pady=20)
         
-        # Center buttons
-        btn_center = tk.Frame(btn_frame, bg=COLORS["white"])
-        btn_center.pack(expand=True)
+        def create_btn(parent, text, color, cmd):
+            return tk.Button(parent, text=text, font=("Segoe UI", 10, "bold"), bg=color, fg=COLORS["white"], 
+                             relief=tk.FLAT, cursor="hand2", command=cmd, width=10, pady=5)
+
+        center_btns = tk.Frame(btn_frame, bg=COLORS["white"])
+        center_btns.pack(expand=True)
         
-        tk.Button(
-            btn_center,
-            text="💾 Lưu",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_save"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.save_subject,
-            width=12,
-            height=2
-        ).pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(
-            btn_center,
-            text="✏️ Sửa",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_edit"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.edit_subject,
-            width=12,
-            height=2
-        ).pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(
-            btn_center,
-            text="🗑️ Xóa",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_delete"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.delete_subject,
-            width=12,
-            height=2
-        ).pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(
-            btn_center,
-            text="🔄 Làm mới",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["btn_new"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.clear_form,
-            width=12,
-            height=2
-        ).pack(side=tk.LEFT, padx=5)
-        
+        create_btn(center_btns, "Lưu", COLORS["btn_save"], self.save_subject).pack(side=tk.LEFT, padx=5)
+        create_btn(center_btns, "Sửa", COLORS["btn_edit"], self.edit_subject).pack(side=tk.LEFT, padx=5)
+        create_btn(center_btns, "Xóa", COLORS["btn_delete"], self.delete_subject).pack(side=tk.LEFT, padx=5)
+        create_btn(center_btns, "Làm mới", COLORS["btn_new"], self.clear_form).pack(side=tk.LEFT, padx=5)
+
         # ============================================================
         # RIGHT PANEL: DANH SÁCH MÔN HỌC
         # ============================================================
-        right_panel = tk.Frame(main_container, bg=COLORS["white"])
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right_panel = tk.Frame(self.window, bg=COLORS["white"])
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Search Bar
-        search_frame = tk.Frame(right_panel, bg=COLORS["white"])
-        search_frame.pack(fill=tk.X, padx=15, pady=15)
+        # Header
+        search_header = tk.Frame(right_panel, bg=COLORS["table_header"], height=50)
+        search_header.pack(fill=tk.X)
+        search_header.pack_propagate(False)
+        tk.Label(search_header, text="Danh sách môn học", font=("Segoe UI", 14, "bold"), bg=COLORS["table_header"], fg=COLORS["white"]).pack(side=tk.LEFT, padx=15, pady=12)
         
-        tk.Label(
-            search_frame,
-            text="🔍 Tìm kiếm:",
-            font=("Segoe UI", 11, "bold"),
-            bg=COLORS["white"]
-        ).pack(side=tk.LEFT, padx=(0, 10))
+        # Search
+        search_controls = tk.Frame(right_panel, bg=COLORS["white"])
+        search_controls.pack(fill=tk.X, padx=15, pady=15)
         
-        self.entry_search = tk.Entry(
-            search_frame,
-            font=("Segoe UI", 11),
-            relief=tk.SOLID,
-            borderwidth=1
-        )
-        self.entry_search.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6)
+        self.entry_search = tk.Entry(search_controls, font=("Segoe UI", 10), relief=tk.SOLID, borderwidth=1, width=30)
+        self.entry_search.pack(side=tk.LEFT, padx=(0, 10))
+        self.entry_search.bind('<Return>', lambda e: self.search_subjects())
         
-        tk.Button(
-            search_frame,
-            text="Tìm kiếm",
-            font=("Segoe UI", 10),
-            bg=COLORS["btn_save"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.search_subjects,
-            width=10
-        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(search_controls, text="Tìm kiếm", bg=COLORS["btn_save"], fg="white", relief=tk.FLAT, command=self.search_subjects).pack(side=tk.LEFT, padx=5)
+        tk.Button(search_controls, text="Tất cả", bg=COLORS["btn_new"], fg="white", relief=tk.FLAT, command=self.load_subjects).pack(side=tk.LEFT, padx=5)
         
-        tk.Button(
-            search_frame,
-            text="Xem tất cả",
-            font=("Segoe UI", 10),
-            bg=COLORS["btn_new"],
-            fg=COLORS["white"],
-            relief=tk.FLAT,
-            cursor="hand2",
-            command=self.load_subjects,
-            width=10
-        ).pack(side=tk.LEFT, padx=5)
-        
-        # Table Container
+        # Table
         table_container = tk.Frame(right_panel, bg=COLORS["white"])
         table_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
         
-        # Treeview with scrollbars
         tree_scroll_y = ttk.Scrollbar(table_container, orient=tk.VERTICAL)
         tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
-        
         tree_scroll_x = ttk.Scrollbar(table_container, orient=tk.HORIZONTAL)
         tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Define columns
         columns = ("STT", "Mã môn", "Tên môn học", "Tín chỉ", "Trạng thái", "Ngày tạo")
-        
-        self.tree = ttk.Treeview(
-            table_container,
-            columns=columns,
-            show="headings",
-            yscrollcommand=tree_scroll_y.set,
-            xscrollcommand=tree_scroll_x.set,
-            height=20
-        )
+        self.tree = ttk.Treeview(table_container, columns=columns, show="headings", yscrollcommand=tree_scroll_y.set, xscrollcommand=tree_scroll_x.set, height=20)
         
         tree_scroll_y.config(command=self.tree.yview)
         tree_scroll_x.config(command=self.tree.xview)
         
-        # Column headers
-        self.tree.heading("STT", text="STT")
-        self.tree.heading("Mã môn", text="Mã môn")
-        self.tree.heading("Tên môn học", text="Tên môn học")
-        self.tree.heading("Tín chỉ", text="Tín chỉ")
-        self.tree.heading("Trạng thái", text="Trạng thái")
-        self.tree.heading("Ngày tạo", text="Ngày tạo")
-        
-        # Column widths
+        for col in columns:
+            self.tree.heading(col, text=col)
+            
         self.tree.column("STT", width=50, anchor=tk.CENTER)
         self.tree.column("Mã môn", width=100, anchor=tk.CENTER)
         self.tree.column("Tên môn học", width=300)
@@ -347,39 +182,30 @@ class SubjectManagementWindow:
         self.tree.column("Ngày tạo", width=150, anchor=tk.CENTER)
         
         self.tree.pack(fill=tk.BOTH, expand=True)
-        
-        # Bind click event
         self.tree.bind('<ButtonRelease-1>', self.on_tree_select)
-        
-        # Alternating row colors
         self.tree.tag_configure('evenrow', background='#F8F9FA')
         self.tree.tag_configure('oddrow', background='#FFFFFF')
         self.tree.tag_configure('inactive', foreground='#95A5A6')
-    
+
     def load_subjects(self):
         """Load danh sách môn học"""
-        # Clear table
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         try:
             subjects = self.api.get_subjects()
-            
             for idx, subject in enumerate(subjects, 1):
                 tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
-                
-                # Add inactive tag if not active
                 tags = [tag]
                 if not subject.get('is_active', True):
                     tags.append('inactive')
                 
-                status = "✅ Hoạt động" if subject.get('is_active', True) else "❌ Ngừng"
+                status = "Hoạt động" if subject.get('is_active', True) else "Ngừng"
                 created_at = subject.get('created_at', '')
                 if created_at:
                     try:
-                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%d/%m/%Y %H:%M')
-                    except:
-                        pass
+                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%d/%m/%Y')
+                    except: pass
                 
                 self.tree.insert("", tk.END, values=(
                     idx,
@@ -389,27 +215,24 @@ class SubjectManagementWindow:
                     status,
                     created_at
                 ), tags=tuple(tags))
-        
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể tải danh sách môn học:\n{str(e)}")
-    
+
     def search_subjects(self):
         """Tìm kiếm môn học"""
         search_term = self.entry_search.get().strip().lower()
-        
         if not search_term:
             self.load_subjects()
             return
         
-        # Clear table
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         try:
             subjects = self.api.get_subjects()
             filtered = [s for s in subjects 
-                       if search_term in s.get('subject_id', '').lower() 
-                       or search_term in s.get('subject_name', '').lower()]
+                       if search_term in str(s.get('subject_id', '')).lower() 
+                       or search_term in str(s.get('subject_name', '')).lower()]
             
             for idx, subject in enumerate(filtered, 1):
                 tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
@@ -417,13 +240,12 @@ class SubjectManagementWindow:
                 if not subject.get('is_active', True):
                     tags.append('inactive')
                 
-                status = "✅ Hoạt động" if subject.get('is_active', True) else "❌ Ngừng"
+                status = "Hoạt động" if subject.get('is_active', True) else "Ngừng"
                 created_at = subject.get('created_at', '')
                 if created_at:
                     try:
-                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%d/%m/%Y %H:%M')
-                    except:
-                        pass
+                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%d/%m/%Y')
+                    except: pass
                 
                 self.tree.insert("", tk.END, values=(
                     idx,
@@ -433,68 +255,41 @@ class SubjectManagementWindow:
                     status,
                     created_at
                 ), tags=tuple(tags))
-        
         except Exception as e:
             messagebox.showerror("Lỗi", f"Lỗi tìm kiếm:\n{str(e)}")
-    
+
     def on_tree_select(self, event):
         """Xử lý khi chọn môn học từ table"""
         selected = self.tree.selection()
-        if not selected:
-            return
+        if not selected: return
         
         item = self.tree.item(selected[0])
         values = item['values']
+        if len(values) < 2: return
         
-        if len(values) < 2:
-            return
-        
-        subject_id = str(values[1])  # Mã môn
-        
+        subject_id = str(values[1])
         try:
-            # Fetch full subject data from API
             subject = self.api.get_subject(subject_id)
-            
             if subject:
                 self.current_subject = subject
                 self.populate_form(subject)
-            else:
-                self.current_subject = None
-        
         except Exception as e:
             print(f"❌ Error loading subject: {e}")
-            self.current_subject = None
-    
+
     def populate_form(self, subject):
         """Điền thông tin môn học vào form"""
         self.clear_form_fields_only()
-        
         try:
-            # Mã môn học
-            if subject.get('subject_id'):
-                self.entry_subject_id.insert(0, str(subject['subject_id']))
-                self.entry_subject_id.config(state='readonly')  # Không cho sửa mã
-            
-            # Tên môn học
-            if subject.get('subject_name'):
-                self.entry_subject_name.insert(0, str(subject['subject_name']))
-            
-            # Số tín chỉ
-            if subject.get('credits'):
-                self.entry_credits.delete(0, tk.END)
-                self.entry_credits.insert(0, str(subject['credits']))
-            
-            # Mô tả
-            if subject.get('description'):
-                self.text_description.insert('1.0', str(subject['description']))
-            
-            # Trạng thái
+            self.entry_subject_id.insert(0, str(subject.get('subject_id', '')))
+            self.entry_subject_id.config(state='readonly')
+            self.entry_subject_name.insert(0, str(subject.get('subject_name', '')))
+            self.entry_credits.delete(0, tk.END)
+            self.entry_credits.insert(0, str(subject.get('credits', '3')))
+            self.text_description.insert('1.0', str(subject.get('description', '')))
             self.var_active.set(subject.get('is_active', True))
-        
         except Exception as e:
             print(f"❌ Error in populate_form: {e}")
-            raise
-    
+
     def clear_form_fields_only(self):
         """Xóa các field trong form"""
         self.entry_subject_id.config(state='normal')
@@ -504,68 +299,41 @@ class SubjectManagementWindow:
         self.entry_credits.insert(0, "3")
         self.text_description.delete('1.0', tk.END)
         self.var_active.set(True)
-    
+
     def clear_form(self):
         """Làm mới form"""
         self.clear_form_fields_only()
         self.current_subject = None
         self.tree.selection_remove(*self.tree.selection())
-    
+
     def validate_form(self):
         """Validate dữ liệu form"""
         subject_id = self.entry_subject_id.get().strip()
         subject_name = self.entry_subject_name.get().strip()
         credits = self.entry_credits.get().strip()
         
-        if not subject_id:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập mã môn học!")
-            self.entry_subject_id.focus()
+        if not subject_id or not subject_name or not credits:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Mã môn, Tên môn và Số tín chỉ!")
             return False
-        
-        # Validate mã môn học (chỉ chữ, số và không có khoảng trắng)
+            
         if not re.match(r'^[A-Za-z0-9]+$', subject_id):
-            messagebox.showwarning(
-                "Mã không hợp lệ",
-                "Mã môn học chỉ được chứa chữ cái và số, không có khoảng trắng!"
-            )
-            self.entry_subject_id.focus()
+            messagebox.showwarning("Mã không hợp lệ", "Mã môn học chỉ được chứa chữ cái và số!")
             return False
-        
-        if not subject_name:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên môn học!")
-            self.entry_subject_name.focus()
-            return False
-        
-        if not credits:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập số tín chỉ!")
-            self.entry_credits.focus()
-            return False
-        
+            
         try:
-            credits_int = int(credits)
-            if credits_int <= 0 or credits_int > 10:
-                messagebox.showwarning(
-                    "Số tín chỉ không hợp lệ",
-                    "Số tín chỉ phải từ 1 đến 10!"
-                )
-                self.entry_credits.focus()
-                return False
+            c = int(credits)
+            if c <= 0: raise ValueError
         except ValueError:
-            messagebox.showwarning(
-                "Số tín chỉ không hợp lệ",
-                "Số tín chỉ phải là số nguyên!"
-            )
-            self.entry_credits.focus()
+            messagebox.showwarning("Lỗi", "Số tín chỉ phải là số nguyên dương!")
             return False
-        
+            
         return True
-    
+
     def save_subject(self):
         """Lưu môn học mới"""
-        if not self.validate_form():
-            return
+        if not self.validate_form(): return
         
-        subject_data = {
+        data = {
             "subject_id": self.entry_subject_id.get().strip().upper(),
             "subject_name": self.entry_subject_name.get().strip(),
             "credits": int(self.entry_credits.get().strip()),
@@ -574,36 +342,22 @@ class SubjectManagementWindow:
         }
         
         try:
-            result = self.api.create_subject(subject_data)
-            
-            if result:
-                messagebox.showinfo(
-                    "Thành công",
-                    f"Đã thêm môn học:\n{subject_data['subject_id']} - {subject_data['subject_name']}"
-                )
+            if self.api.create_subject(data):
+                messagebox.showinfo("Thành công", "Đã thêm môn học!")
                 self.clear_form()
                 self.load_subjects()
             else:
-                messagebox.showerror("Lỗi", "Không thể thêm môn học. Mã môn có thể đã tồn tại.")
-        
+                messagebox.showerror("Lỗi", "Không thể thêm môn học (có thể mã đã tồn tại).")
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi khi lưu môn học:\n{str(e)}")
-    
+            messagebox.showerror("Lỗi", f"Lỗi khi lưu:\n{str(e)}")
+
     def edit_subject(self):
         """Cập nhật môn học"""
         if not self.current_subject:
-            messagebox.showwarning(
-                "Chưa chọn môn học",
-                "Vui lòng chọn môn học từ danh sách để chỉnh sửa!"
-            )
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn môn học cần sửa!")
             return
         
-        if not self.validate_form():
-            return
-        
-        subject_id = self.current_subject['subject_id']
-        
-        subject_data = {
+        data = {
             "subject_name": self.entry_subject_name.get().strip(),
             "credits": int(self.entry_credits.get().strip()),
             "description": self.text_description.get('1.0', tk.END).strip(),
@@ -611,67 +365,29 @@ class SubjectManagementWindow:
         }
         
         try:
-            result = self.api.update_subject(subject_id, subject_data)
-            
-            if result:
-                messagebox.showinfo(
-                    "Thành công",
-                    f"Đã cập nhật môn học:\n{subject_id} - {subject_data['subject_name']}"
-                )
+            if self.api.update_subject(self.current_subject['subject_id'], data):
+                messagebox.showinfo("Thành công", "Cập nhật thành công!")
                 self.clear_form()
                 self.load_subjects()
             else:
-                messagebox.showerror("Lỗi", "Không thể cập nhật môn học.")
-        
+                messagebox.showerror("Lỗi", "Cập nhật thất bại.")
         except Exception as e:
             messagebox.showerror("Lỗi", f"Lỗi khi cập nhật:\n{str(e)}")
-    
+
     def delete_subject(self):
         """Xóa môn học"""
         if not self.current_subject:
-            messagebox.showwarning(
-                "Chưa chọn môn học",
-                "Vui lòng chọn môn học từ danh sách để xóa!"
-            )
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn môn học cần xóa!")
             return
-        
-        subject_id = self.current_subject['subject_id']
-        subject_name = self.current_subject['subject_name']
-        
-        confirm = messagebox.askyesno(
-            "Xác nhận xóa",
-            f"Bạn có chắc muốn xóa môn học:\n\n"
-            f"{subject_id} - {subject_name}\n\n"
-            f"⚠️ Hành động này không thể hoàn tác!"
-        )
-        
-        if not confirm:
-            return
-        
-        try:
-            success = self.api.delete_subject(subject_id)
             
-            if success:
-                messagebox.showinfo(
-                    "Thành công",
-                    f"Đã xóa môn học: {subject_id}"
-                )
-                self.clear_form()
-                self.load_subjects()
-            else:
-                messagebox.showerror("Lỗi", "Không thể xóa môn học.")
-        
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi khi xóa:\n{str(e)}")
-
-
-# ============================================================================
-# TEST
-# ============================================================================
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()  # Hide root window
-    
-    app = SubjectManagementWindow(root)
-    root.mainloop()
+        sid = self.current_subject['subject_id']
+        if messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa môn học {sid}?"):
+            try:
+                if self.api.delete_subject(sid):
+                    messagebox.showinfo("Thành công", "Đã xóa môn học!")
+                    self.clear_form()
+                    self.load_subjects()
+                else:
+                    messagebox.showerror("Lỗi", "Xóa thất bại.")
+            except Exception as e:
+                messagebox.showerror("Lỗi", f"Lỗi khi xóa:\n{str(e)}")

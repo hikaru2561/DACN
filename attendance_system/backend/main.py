@@ -682,6 +682,95 @@ def get_cameras(
     return cameras
 
 
+@app.get("/api/cameras/{device_id}", response_model=schemas.CameraDeviceResponse, tags=["Cameras"])
+def get_camera(device_id: int, db: Session = Depends(get_db)):
+    """Lấy thông tin một camera"""
+    from models import CameraDevice
+    camera = db.query(CameraDevice).filter(CameraDevice.device_id == device_id).first()
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    return camera
+
+
+@app.post("/api/cameras", response_model=schemas.CameraDeviceResponse, tags=["Cameras"])
+def create_camera(camera: schemas.CameraDeviceCreate, db: Session = Depends(get_db)):
+    """Thêm camera mới"""
+    from models import CameraDevice
+    
+    # Check duplicate code
+    existing = db.query(CameraDevice).filter(CameraDevice.device_code == camera.device_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Device code already exists")
+    
+    db_camera = CameraDevice(**camera.dict())
+    db.add(db_camera)
+    db.commit()
+    db.refresh(db_camera)
+    return db_camera
+
+
+@app.put("/api/cameras/{device_id}", response_model=schemas.CameraDeviceResponse, tags=["Cameras"])
+def update_camera(
+    device_id: int,
+    camera: schemas.CameraDeviceUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật thông tin camera"""
+    from models import CameraDevice
+    
+    db_camera = db.query(CameraDevice).filter(CameraDevice.device_id == device_id).first()
+    if not db_camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    
+    for key, value in camera.dict(exclude_unset=True).items():
+        setattr(db_camera, key, value)
+    
+    db.commit()
+    db.refresh(db_camera)
+    return db_camera
+
+
+@app.delete("/api/cameras/{device_id}", tags=["Cameras"])
+def delete_camera(device_id: int, db: Session = Depends(get_db)):
+    """Xóa camera"""
+    from models import CameraDevice
+    
+    db_camera = db.query(CameraDevice).filter(CameraDevice.device_id == device_id).first()
+    if not db_camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    
+    db.delete(db_camera)
+    db.commit()
+    return {"message": "Camera deleted successfully"}
+
+
+# ============================================================================
+# REPORTS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/reports/attendance-stats", tags=["Reports"])
+def get_attendance_stats(db: Session = Depends(get_db)):
+    """Lấy thống kê điểm danh (từ View)"""
+    try:
+        # Query directly from the view
+        result = db.execute(text("SELECT * FROM v_attendance_statistics"))
+        stats = []
+        for row in result:
+            stats.append({
+                "class_id": row.class_id,
+                "class_name": row.class_name,
+                "subject_name": row.subject_name,
+                "teacher_name": row.teacher_name,
+                "total_sessions": row.total_sessions,
+                "total_students": row.total_students,
+                "total_attendance_records": row.total_attendance_records,
+                "attendance_rate": float(row.attendance_rate) if row.attendance_rate else 0.0
+            })
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+
+
 # ============================================================================
 # RUN SERVER
 # ============================================================================
