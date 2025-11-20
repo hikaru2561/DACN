@@ -46,7 +46,7 @@ COLORS = {
 
 class AttendanceConfig:
     """Cấu hình điểm danh"""
-    ESP32_CAM_IP = "192.168.243.176"
+    ESP32_CAM_IP = "192.168.1.169"
     STREAM_URL = f"http://{ESP32_CAM_IP}/stream"
     
     # Dataset paths
@@ -159,21 +159,16 @@ class FaceRecognitionEngine:
     def __init__(self):
         """Khởi tạo InsightFace model"""
         self.app = None  # Full pipeline (detection + recognition)
-        self.rec_model = None  # Recognition only (extract embedding)
         self.embeddings_db = {}  # {student_id: [embeddings]}
         
         if INSIGHTFACE_AVAILABLE:
             try:
                 print("🔄 Loading InsightFace models...")
                 
-                # Full pipeline (cho real-time recognition)
+                # Full pipeline (cho cả training và recognition)
+                # app.get() tự động detect + align + extract embedding
                 self.app = FaceAnalysis(providers=['CPUExecutionProvider'])
                 self.app.prepare(ctx_id=-1, det_size=(640, 640))
-                
-                # Recognition model only (cho training từ ảnh đã crop)
-                from insightface.model_zoo import get_model
-                self.rec_model = get_model('buffalo_l', providers=['CPUExecutionProvider'])
-                self.rec_model.prepare(ctx_id=-1)
                 
                 print("✅ Models loaded!")
             except Exception as e:
@@ -181,7 +176,6 @@ class FaceRecognitionEngine:
                 import traceback
                 traceback.print_exc()
                 self.app = None
-                self.rec_model = None
         
         # Load embeddings từ file
         self.load_embeddings()
@@ -200,15 +194,101 @@ class FaceRecognitionEngine:
             print(f"❌ Load embeddings error: {e}")
             self.embeddings_db = {}
     
+    def add_student_embeddings(self, student_id, progress_callback=None):
+        """Thêm embeddings cho MỘT sinh viên mới (không rebuild toàn bộ)
+        
+        Args:
+            student_id: ID sinh viên cần extract embeddings
+            progress_callback: Callback để update progress
+        
+        Returns:
+            dict: {"success": bool, "message": str, "images_processed": int}
+        """
+        if not INSIGHTFACE_AVAILABLE or self.app is None:
+            return {"success": False, "message": "InsightFace không khả dụng"}
+        
+        student_dir = AttendanceConfig.DATASET_PROCESSED / student_id
+        
+        if not student_dir.exists():
+            return {"success": False, "message": f"Không tìm thấy folder: {student_dir}"}
+        
+        # Đọc ảnh của sinh viên này
+        image_files = list(student_dir.glob("*.jpg"))
+        
+        if len(image_files) == 0:
+            return {"success": False, "message": "Không có ảnh nào trong folder!"}
+        
+        print(f"\n🔍 Extracting embeddings cho sinh viên: {student_id}")
+        print(f"📁 Found {len(image_files)} images")
+        
+        embeddings = []
+        failed = 0
+        
+        for idx, img_path in enumerate(image_files, 1):
+            if progress_callback:
+                progress_callback(idx, len(image_files), f"Đang xử lý ảnh {idx}/{len(image_files)}")
+            
+            print(f"  📷 [{idx}/{len(image_files)}] Processing: {img_path.name}")
+            
+            try:
+                # Đọc ảnh toàn diện
+                img = cv2.imread(str(img_path))
+                if img is None:
+                    print(f"    ❌ cv2.imread failed")
+                    failed += 1
+                    continue
+                
+                # InsightFace detect + extract
+                faces = self.app.get(img)
+                
+                if len(faces) == 0:
+                    print(f"    ⚠️ No face detected")
+                    failed += 1
+                    continue
+                
+                # Lấy face đầu tiên
+                embedding = faces[0].embedding
+                embeddings.append(embedding)
+                print(f"    ✅ Embedding extracted (norm: {np.linalg.norm(embedding):.2f})")
+                
+            except Exception as e:
+                print(f"    ❌ Error: {e}")
+                failed += 1
+        
+        if len(embeddings) == 0:
+            return {"success": False, "message": "Không extract được embedding nào!"}
+        
+        # 🔥 APPEND vào embeddings_db hiện tại (không xóa data cũ)
+        self.embeddings_db[student_id] = embeddings
+        
+        # 🔥 LƯU INCREMENTAL (giữ nguyên data cũ + thêm mới)
+        try:
+            with open(AttendanceConfig.EMBEDDINGS_FILE, 'wb') as f:
+                pickle.dump(self.embeddings_db, f)
+            
+            print(f"✅ Saved {len(embeddings)} embeddings cho {student_id}")
+            print(f"📊 Total students in DB: {len(self.embeddings_db)}")
+            
+            return {
+                "success": True,
+                "message": f"Đã trích xuất {len(embeddings)} embeddings",
+                "images_processed": len(embeddings),
+                "images_failed": failed
+            }
+            
+        except Exception as e:
+            print(f"❌ Save error: {e}")
+            return {"success": False, "message": f"Lỗi lưu file: {str(e)}"}
+    
     def build_embeddings(self, progress_callback=None):
         """Xây dựng embeddings database từ dataset/processed/
         
-        Ảnh trong dataset ĐÃ LÀ FACE CROP + CLAHE rồi!
-        → Không cần detect, chỉ cần extract embedding trực tiếp
+        Ảnh trong dataset là FRAME TOÀN DIỆN từ camera.
+        → InsightFace tự động detect + align + extract embedding
         """
-        if not INSIGHTFACE_AVAILABLE or self.rec_model is None:
-            print("❌ InsightFace recognition model not available")
-            return {"success": False, "error": "Recognition model not available"}
+        if not INSIGHTFACE_AVAILABLE or self.app is None:
+            print("❌ InsightFace app not available")
+            return {"success": False, "error": "InsightFace app not available"}
         
         self.embeddings_db = {}
         processed_dir = AttendanceConfig.DATASET_PROCESSED
@@ -246,7 +326,7 @@ class FaceRecognitionEngine:
             for img_path in image_files:
                 print(f"  📷 Processing: {img_path.name}")
                 try:
-                    # 🔥 ĐỌC ẢNH GỐC - InsightFace sẽ tự xử lý!
+                    # 🔥 ĐỌC ẢNH TOÀN DIỆN - InsightFace sẽ tự detect face!
                     img = cv2.imread(str(img_path))
                     if img is None:
                         print(f"    ❌ cv2.imread failed")
@@ -255,10 +335,18 @@ class FaceRecognitionEngine:
                     
                     print(f"    🖼️ Image size: {img.shape}")
                     
-                    # 🔥 ĐƯA THẲNG VÀO InsightFace - TỰ ĐỘNG detect, align, resize, extract
-                    # get_feat() mong đợi list of BGR images (bất kỳ kích thước)
-                    embeddings_batch = self.rec_model.get_feat([img])
-                    embedding = embeddings_batch[0]
+                    # 🔥 SỬ DỤNG app.get() để DETECT + EXTRACT từ ảnh toàn diện
+                    # app.get() tự động: detect faces → align → extract embeddings
+                    faces = self.app.get(img)
+                    
+                    if len(faces) == 0:
+                        print(f"    ⚠️ No face detected in this image")
+                        failed_images += 1
+                        continue
+                    
+                    # Lấy face đầu tiên (giả sử mỗi ảnh có 1 người)
+                    face = faces[0]
+                    embedding = face.embedding
                     
                     embeddings.append(embedding)
                     total_images += 1
@@ -299,30 +387,25 @@ class FaceRecognitionEngine:
             "failed_images": failed_images
         }
     
-    def recognize_face(self, frame):
+    def recognize_face(self, face_embedding):
         """
-        Nhận dạng khuôn mặt trong frame
+        Nhận dạng khuôn mặt từ embedding
+        Args:
+            face_embedding: 512-dim embedding từ InsightFace
         Returns: (student_id, similarity_score) or (None, 0)
         """
         if not INSIGHTFACE_AVAILABLE or self.app is None:
             return None, 0
         
         try:
-            faces = self.app.get(frame)
-            if len(faces) == 0:
-                return None, 0
-            
-            # Lấy embedding của face đầu tiên
-            query_embedding = faces[0].embedding
-            
-            # So sánh với database
+            # So sánh embedding với database
             best_match = None
             best_similarity = 0
             
             for student_id, embeddings in self.embeddings_db.items():
                 for emb in embeddings:
                     # Cosine similarity
-                    similarity = self.cosine_similarity(query_embedding, emb)
+                    similarity = self.cosine_similarity(face_embedding, emb)
                     
                     if similarity > best_similarity:
                         best_similarity = similarity
@@ -678,7 +761,7 @@ class AttendanceModule:
         
         display = frame.copy()
         
-        # Face recognition
+        # Face detection & recognition
         faces = self.recognition_engine.get_faces_in_frame(frame)
         
         for face in faces:
@@ -686,8 +769,8 @@ class AttendanceModule:
             bbox = face.bbox.astype(int)
             x1, y1, x2, y2 = bbox
             
-            # Recognize
-            student_id, similarity = self.recognition_engine.recognize_face(frame)
+            # 🔥 NHẬN DẠNG TỪNG FACE RIÊNG BIỆT (dùng embedding của face này)
+            student_id, similarity = self.recognition_engine.recognize_face(face.embedding)
             
             # Kiểm tra cooldown
             current_time = time.time()

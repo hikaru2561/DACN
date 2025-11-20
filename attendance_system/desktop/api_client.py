@@ -106,6 +106,19 @@ class APIClient:
         """Lấy thông tin một giảng viên"""
         return self._get(f"/api/teachers/{teacher_id}")
     
+    def create_teacher(self, teacher_data: dict) -> Optional[Dict]:
+        """Tạo giảng viên mới"""
+        return self._post("/api/teachers", teacher_data)
+    
+    def update_teacher(self, teacher_id: str, teacher_data: dict) -> Optional[Dict]:
+        """Cập nhật giảng viên"""
+        return self._put(f"/api/teachers/{teacher_id}", teacher_data)
+    
+    def delete_teacher(self, teacher_id: str) -> bool:
+        """Xóa giảng viên"""
+        result = self._delete(f"/api/teachers/{teacher_id}")
+        return result is not None
+    
     # ========================================================================
     # SUBJECTS
     # ========================================================================
@@ -114,6 +127,23 @@ class APIClient:
         """Lấy danh sách môn học"""
         result = self._get("/api/subjects", params={"skip": skip, "limit": limit})
         return result if result else []
+    
+    def get_subject(self, subject_id: str) -> Optional[Dict]:
+        """Lấy thông tin một môn học"""
+        return self._get(f"/api/subjects/{subject_id}")
+    
+    def create_subject(self, subject_data: dict) -> Optional[Dict]:
+        """Tạo môn học mới"""
+        return self._post("/api/subjects", subject_data)
+    
+    def update_subject(self, subject_id: str, subject_data: dict) -> Optional[Dict]:
+        """Cập nhật môn học"""
+        return self._put(f"/api/subjects/{subject_id}", subject_data)
+    
+    def delete_subject(self, subject_id: str) -> bool:
+        """Xóa môn học"""
+        result = self._delete(f"/api/subjects/{subject_id}")
+        return result is not None
     
     # ========================================================================
     # CLASSES
@@ -131,6 +161,33 @@ class APIClient:
         """Lấy thông tin một lớp học"""
         return self._get(f"/api/classes/{class_id}")
     
+    def create_class(self, class_data: dict) -> Optional[Dict]:
+        """Tạo lớp học mới"""
+        return self._post("/api/classes", class_data)
+    
+    def update_class(self, class_id: int, class_data: dict) -> Optional[Dict]:
+        """Cập nhật lớp học"""
+        return self._put(f"/api/classes/{class_id}", class_data)
+    
+    def delete_class(self, class_id: int) -> bool:
+        """Xóa lớp học"""
+        result = self._delete(f"/api/classes/{class_id}")
+        return result is not None
+    
+    def get_class_students(self, class_id: int) -> List[Dict]:
+        """Lấy danh sách sinh viên trong lớp"""
+        result = self._get(f"/api/classes/{class_id}/students")
+        return result if result else []
+    
+    def enroll_student(self, class_id: int, student_id: str) -> Optional[Dict]:
+        """Đăng ký sinh viên vào lớp"""
+        return self._post(f"/api/classes/{class_id}/students", {"student_id": student_id})
+    
+    def unenroll_student(self, class_id: int, student_id: str) -> bool:
+        """Xóa sinh viên khỏi lớp"""
+        result = self._delete(f"/api/classes/{class_id}/students/{student_id}")
+        return result is not None
+    
     # ========================================================================
     # SESSIONS
     # ========================================================================
@@ -147,12 +204,25 @@ class APIClient:
         """Lấy thông tin một buổi học"""
         return self._get(f"/api/sessions/{session_id}")
     
+    def create_session(self, session_data: dict) -> Optional[Dict]:
+        """Tạo buổi học mới"""
+        return self._post("/api/sessions", session_data)
+    
+    def update_session(self, session_id: int, session_data: dict) -> Optional[Dict]:
+        """Cập nhật buổi học"""
+        return self._put(f"/api/sessions/{session_id}", session_data)
+    
+    def delete_session(self, session_id: int) -> bool:
+        """Xóa buổi học"""
+        result = self._delete(f"/api/sessions/{session_id}")
+        return result is not None
+    
     # ========================================================================
     # ATTENDANCE
     # ========================================================================
     
     def get_attendance(self, session_id: int = None, student_id: str = None, 
-                       skip: int = 0, limit: int = 100) -> List[Dict]:
+                       skip: int = 0, limit: int = 1000) -> List[Dict]:
         """Lấy danh sách điểm danh"""
         params = {"skip": skip, "limit": limit}
         if session_id:
@@ -162,9 +232,22 @@ class APIClient:
         result = self._get("/api/attendance", params=params)
         return result if result else []
     
+    def get_attendance_by_id(self, attendance_id: int) -> Optional[Dict]:
+        """Lấy thông tin một bản ghi điểm danh"""
+        return self._get(f"/api/attendance/{attendance_id}")
+    
     def create_attendance(self, attendance_data: dict) -> Optional[Dict]:
         """Tạo bản ghi điểm danh"""
         return self._post("/api/attendance", attendance_data)
+    
+    def update_attendance(self, attendance_id: int, attendance_data: dict) -> Optional[Dict]:
+        """Cập nhật bản ghi điểm danh"""
+        return self._put(f"/api/attendance/{attendance_id}", attendance_data)
+    
+    def delete_attendance(self, attendance_id: int) -> bool:
+        """Xóa bản ghi điểm danh"""
+        result = self._delete(f"/api/attendance/{attendance_id}")
+        return result is not None
     
     # ========================================================================
     # CAMERAS

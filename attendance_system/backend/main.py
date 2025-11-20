@@ -175,6 +175,60 @@ def get_teacher(teacher_id: str, db: Session = Depends(get_db)):
     return teacher
 
 
+@app.post("/api/teachers", response_model=schemas.TeacherResponse, tags=["Teachers"])
+def create_teacher(teacher: schemas.TeacherCreate, db: Session = Depends(get_db)):
+    """Tạo giảng viên mới"""
+    from models import Teacher
+    
+    # Kiểm tra trùng teacher_id
+    existing = db.query(Teacher).filter(Teacher.teacher_id == teacher.teacher_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Teacher ID already exists")
+    
+    # Tạo mới
+    db_teacher = Teacher(**teacher.dict())
+    db.add(db_teacher)
+    db.commit()
+    db.refresh(db_teacher)
+    return db_teacher
+
+
+@app.put("/api/teachers/{teacher_id}", response_model=schemas.TeacherResponse, tags=["Teachers"])
+def update_teacher(
+    teacher_id: str,
+    teacher: schemas.TeacherUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật giảng viên"""
+    from models import Teacher
+    
+    db_teacher = db.query(Teacher).filter(Teacher.teacher_id == teacher_id).first()
+    if not db_teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    # Update fields
+    for key, value in teacher.dict(exclude_unset=True).items():
+        setattr(db_teacher, key, value)
+    
+    db.commit()
+    db.refresh(db_teacher)
+    return db_teacher
+
+
+@app.delete("/api/teachers/{teacher_id}", tags=["Teachers"])
+def delete_teacher(teacher_id: str, db: Session = Depends(get_db)):
+    """Xóa giảng viên"""
+    from models import Teacher
+    
+    db_teacher = db.query(Teacher).filter(Teacher.teacher_id == teacher_id).first()
+    if not db_teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    
+    db.delete(db_teacher)
+    db.commit()
+    return {"message": f"Teacher {teacher_id} deleted successfully"}
+
+
 # ============================================================================
 # SUBJECTS ENDPOINTS
 # ============================================================================
@@ -189,6 +243,70 @@ def get_subjects(
     from models import Subject
     subjects = db.query(Subject).offset(skip).limit(limit).all()
     return subjects
+
+
+@app.get("/api/subjects/{subject_id}", response_model=schemas.SubjectResponse, tags=["Subjects"])
+def get_subject(subject_id: str, db: Session = Depends(get_db)):
+    """Lấy thông tin một môn học"""
+    from models import Subject
+    subject = db.query(Subject).filter(Subject.subject_id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    return subject
+
+
+@app.post("/api/subjects", response_model=schemas.SubjectResponse, tags=["Subjects"])
+def create_subject(subject: schemas.SubjectCreate, db: Session = Depends(get_db)):
+    """Tạo môn học mới"""
+    from models import Subject
+    
+    # Kiểm tra trùng subject_id
+    existing = db.query(Subject).filter(Subject.subject_id == subject.subject_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Subject ID already exists")
+    
+    # Tạo mới
+    db_subject = Subject(**subject.dict())
+    db.add(db_subject)
+    db.commit()
+    db.refresh(db_subject)
+    return db_subject
+
+
+@app.put("/api/subjects/{subject_id}", response_model=schemas.SubjectResponse, tags=["Subjects"])
+def update_subject(
+    subject_id: str,
+    subject: schemas.SubjectUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật môn học"""
+    from models import Subject
+    
+    db_subject = db.query(Subject).filter(Subject.subject_id == subject_id).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Update fields
+    for key, value in subject.dict(exclude_unset=True).items():
+        setattr(db_subject, key, value)
+    
+    db.commit()
+    db.refresh(db_subject)
+    return db_subject
+
+
+@app.delete("/api/subjects/{subject_id}", tags=["Subjects"])
+def delete_subject(subject_id: str, db: Session = Depends(get_db)):
+    """Xóa môn học"""
+    from models import Subject
+    
+    db_subject = db.query(Subject).filter(Subject.subject_id == subject_id).first()
+    if not db_subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    db.delete(db_subject)
+    db.commit()
+    return {"message": f"Subject {subject_id} deleted successfully"}
 
 
 # ============================================================================
@@ -223,6 +341,143 @@ def get_class(class_id: int, db: Session = Depends(get_db)):
     return class_obj
 
 
+@app.post("/api/classes", response_model=schemas.ClassResponse, tags=["Classes"])
+def create_class(class_data: schemas.ClassCreate, db: Session = Depends(get_db)):
+    """Tạo lớp học mới"""
+    from models import Class
+    
+    # Tạo mới
+    db_class = Class(**class_data.dict())
+    db.add(db_class)
+    db.commit()
+    db.refresh(db_class)
+    return db_class
+
+
+@app.put("/api/classes/{class_id}", response_model=schemas.ClassResponse, tags=["Classes"])
+def update_class(
+    class_id: int,
+    class_data: schemas.ClassUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật lớp học"""
+    from models import Class
+    
+    db_class = db.query(Class).filter(Class.class_id == class_id).first()
+    if not db_class:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Update fields
+    for key, value in class_data.dict(exclude_unset=True).items():
+        setattr(db_class, key, value)
+    
+    db.commit()
+    db.refresh(db_class)
+    return db_class
+
+
+@app.delete("/api/classes/{class_id}", tags=["Classes"])
+def delete_class(class_id: int, db: Session = Depends(get_db)):
+    """Xóa lớp học"""
+    from models import Class
+    
+    db_class = db.query(Class).filter(Class.class_id == class_id).first()
+    if not db_class:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    db.delete(db_class)
+    db.commit()
+    return {"message": f"Class {class_id} deleted successfully"}
+
+
+@app.get("/api/classes/{class_id}/students", response_model=List[schemas.StudentResponse], tags=["Classes"])
+def get_class_students(class_id: int, db: Session = Depends(get_db)):
+    """Lấy danh sách sinh viên trong lớp"""
+    from models import Class, ClassEnrollment, Student
+    
+    # Kiểm tra lớp tồn tại
+    class_obj = db.query(Class).filter(Class.class_id == class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Lấy sinh viên qua bảng enrollment
+    students = db.query(Student).join(
+        ClassEnrollment,
+        Student.student_id == ClassEnrollment.student_id
+    ).filter(
+        ClassEnrollment.class_id == class_id,
+        ClassEnrollment.is_active == True
+    ).all()
+    
+    return students
+
+
+@app.post("/api/classes/{class_id}/students", tags=["Classes"])
+def enroll_student(
+    class_id: int,
+    enrollment: dict,
+    db: Session = Depends(get_db)
+):
+    """Thêm sinh viên vào lớp"""
+    from models import Class, Student, ClassEnrollment
+    
+    student_id = str(enrollment.get("student_id"))  # Convert to string
+    
+    # Kiểm tra lớp tồn tại
+    class_obj = db.query(Class).filter(Class.class_id == class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Kiểm tra sinh viên tồn tại
+    student = db.query(Student).filter(Student.student_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Kiểm tra đã đăng ký chưa
+    existing = db.query(ClassEnrollment).filter(
+        ClassEnrollment.class_id == class_id,
+        ClassEnrollment.student_id == student_id
+    ).first()
+    
+    if existing:
+        if existing.is_active:
+            raise HTTPException(status_code=400, detail="Student already enrolled")
+        else:
+            # Kích hoạt lại
+            existing.is_active = True
+            db.commit()
+            return {"message": "Student re-enrolled successfully"}
+    
+    # Tạo enrollment mới
+    db_enrollment = ClassEnrollment(
+        class_id=class_id,
+        student_id=student_id
+    )
+    db.add(db_enrollment)
+    db.commit()
+    
+    return {"message": "Student enrolled successfully"}
+
+
+@app.delete("/api/classes/{class_id}/students/{student_id}", tags=["Classes"])
+def unenroll_student(class_id: int, student_id: str, db: Session = Depends(get_db)):
+    """Xóa sinh viên khỏi lớp"""
+    from models import ClassEnrollment
+    
+    enrollment = db.query(ClassEnrollment).filter(
+        ClassEnrollment.class_id == class_id,
+        ClassEnrollment.student_id == student_id
+    ).first()
+    
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+    
+    db.delete(enrollment)
+    db.commit()
+    
+    return {"message": "Student unenrolled successfully"}
+
+
 # ============================================================================
 # SESSIONS ENDPOINTS
 # ============================================================================
@@ -253,6 +508,60 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@app.post("/api/sessions", response_model=schemas.SessionResponse, tags=["Sessions"])
+def create_session(session_data: schemas.SessionCreate, db: Session = Depends(get_db)):
+    """Tạo buổi học mới"""
+    from models import Session as SessionModel, Class
+    
+    # Kiểm tra lớp tồn tại
+    class_obj = db.query(Class).filter(Class.class_id == session_data.class_id).first()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Tạo mới
+    db_session = SessionModel(**session_data.dict())
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+
+@app.put("/api/sessions/{session_id}", response_model=schemas.SessionResponse, tags=["Sessions"])
+def update_session(
+    session_id: int,
+    session_data: schemas.SessionUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật buổi học"""
+    from models import Session as SessionModel
+    
+    db_session = db.query(SessionModel).filter(SessionModel.session_id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update fields
+    for key, value in session_data.dict(exclude_unset=True).items():
+        setattr(db_session, key, value)
+    
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+
+@app.delete("/api/sessions/{session_id}", tags=["Sessions"])
+def delete_session(session_id: int, db: Session = Depends(get_db)):
+    """Xóa buổi học"""
+    from models import Session as SessionModel
+    
+    db_session = db.query(SessionModel).filter(SessionModel.session_id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    db.delete(db_session)
+    db.commit()
+    return {"message": f"Session {session_id} deleted successfully"}
 
 
 # ============================================================================
@@ -304,6 +613,53 @@ def create_attendance(attendance: schemas.AttendanceCreate, db: Session = Depend
     db.commit()
     db.refresh(db_attendance)
     return db_attendance
+
+
+@app.get("/api/attendance/{attendance_id}", response_model=schemas.AttendanceResponse, tags=["Attendance"])
+def get_attendance_by_id(attendance_id: int, db: Session = Depends(get_db)):
+    """Lấy thông tin một bản ghi điểm danh"""
+    from models import Attendance
+    
+    attendance = db.query(Attendance).filter(Attendance.attendance_id == attendance_id).first()
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    return attendance
+
+
+@app.put("/api/attendance/{attendance_id}", response_model=schemas.AttendanceResponse, tags=["Attendance"])
+def update_attendance(
+    attendance_id: int,
+    attendance_data: schemas.AttendanceUpdate,
+    db: Session = Depends(get_db)
+):
+    """Cập nhật bản ghi điểm danh"""
+    from models import Attendance
+    
+    db_attendance = db.query(Attendance).filter(Attendance.attendance_id == attendance_id).first()
+    if not db_attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    # Update fields
+    for key, value in attendance_data.dict(exclude_unset=True).items():
+        setattr(db_attendance, key, value)
+    
+    db.commit()
+    db.refresh(db_attendance)
+    return db_attendance
+
+
+@app.delete("/api/attendance/{attendance_id}", tags=["Attendance"])
+def delete_attendance(attendance_id: int, db: Session = Depends(get_db)):
+    """Xóa bản ghi điểm danh"""
+    from models import Attendance
+    
+    db_attendance = db.query(Attendance).filter(Attendance.attendance_id == attendance_id).first()
+    if not db_attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    db.delete(db_attendance)
+    db.commit()
+    return {"message": "Attendance deleted successfully"}
 
 
 # ============================================================================

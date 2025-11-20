@@ -217,6 +217,7 @@ class ClassEnrollment(Base):
     class_id = Column(Integer, ForeignKey("classes.class_id", ondelete="CASCADE"))
     student_id = Column(String(20), ForeignKey("students.student_id", ondelete="CASCADE"))
     enrolled_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)  # Thêm cột is_active
     
     # Relationships
     class_obj = relationship("Class", back_populates="enrollments")

@@ -1,6 +1,6 @@
 """
 Camera Capture Module - Chụp ảnh khuôn mặt sinh viên
-Tích hợp ESP32-CAM + MediaPipe Face Detection
+Tích hợp ESP32-CAM + MediaPipe Face Detection + Anti-Duplicate Validation
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -12,6 +12,16 @@ from datetime import datetime
 from pathlib import Path
 from threading import Thread
 import time
+import pickle
+from config import (
+    CAMERA_CONFIG,
+    CAPTURE_CONFIG,
+    UI_CONFIG,
+    FACE_RECOGNITION_CONFIG,
+    get_camera_url,
+    get_dataset_path,
+    get_embeddings_path
+)
 
 try:
     import mediapipe as mp
@@ -20,47 +30,148 @@ except ImportError:
     MEDIAPIPE_AVAILABLE = False
     print("⚠️ MediaPipe not installed. Using basic face detection.")
 
-
-# ============================================================================
-# COLOR SCHEME
-# ============================================================================
-
-COLORS = {
-    "primary": "#2196F3",
-    "success": "#4CAF50",
-    "danger": "#F44336",
-    "warning": "#FF9800",
-    "info": "#00BCD4",
-    "dark": "#212121",
-    "light": "#FAFAFA",
-    "white": "#FFFFFF",
-    "text": "#212121",
-    "border": "#E0E0E0",
-}
+try:
+    from insightface.app import FaceAnalysis
+    INSIGHTFACE_AVAILABLE = True
+except ImportError:
+    INSIGHTFACE_AVAILABLE = False
+    print("⚠️ InsightFace not installed. Duplicate check disabled.")
 
 
 # ============================================================================
-# CONFIGURATION
+# COLOR SCHEME (From Config)
+# ============================================================================
+
+COLORS = UI_CONFIG["colors"]
+
+
+# ============================================================================
+# CONFIGURATION (From Config)
 # ============================================================================
 
 class CaptureConfig:
     """Cấu hình chụp ảnh"""
-    ESP32_CAM_IP = "192.168.243.176"
-    STREAM_URL = f"http://{ESP32_CAM_IP}/stream"
+    STREAM_URL = get_camera_url()
     
     # Dataset paths
-    DATASET_ROOT = Path(r"d:\HUTECH\DACN\dataset")
-    DATASET_PROCESSED = DATASET_ROOT / "processed"
+    DATASET_ROOT = Path(get_dataset_path())
+    DATASET_PROCESSED = DATASET_ROOT
     
     # Capture settings
-    TARGET_PHOTOS = 20  # Số ảnh cần chụp
+    TARGET_PHOTOS = CAPTURE_CONFIG["target_photos"]
     FACE_OUTPUT_SIZE = (224, 224)  # None = không resize, giữ nguyên size crop
-    MIN_QUALITY_SCORE = 65  # Điểm chất lượng tối thiểu
-    CAPTURE_COOLDOWN = 0.5  # Giây giữa các lần chụp
+    MIN_QUALITY_SCORE = CAPTURE_CONFIG["min_quality_score"] * 100  # Convert to percentage
+    CAPTURE_COOLDOWN = CAPTURE_CONFIG["capture_delay_ms"] / 1000  # Convert to seconds
     
     # MediaPipe settings
     MIN_DETECTION_CONFIDENCE = 0.6
     MODEL_SELECTION = 1  # 0=short range, 1=full range
+    
+    # Anti-duplicate settings
+    ENABLE_DUPLICATE_CHECK = False  # 🔥 TẠM THỜI TỮT - Có thể bật sau khi test
+    DUPLICATE_THRESHOLD = FACE_RECOGNITION_CONFIG["similarity_threshold"]
+    EMBEDDINGS_FILE = Path(get_embeddings_path())
+
+
+# ============================================================================
+# DUPLICATE CHECKER - Kiểm tra trùng lặp với sinh viên khác
+# ============================================================================
+
+class DuplicateChecker:
+    """Kiểm tra ảnh chụp có trùng với sinh viên khác trong DB không"""
+    
+    def __init__(self):
+        self.embeddings_db = {}
+        self.face_app = None
+        self.enabled = INSIGHTFACE_AVAILABLE and CaptureConfig.ENABLE_DUPLICATE_CHECK
+        
+        if self.enabled:
+            print("🔄 Initializing duplicate checker...")
+            self.load_embeddings()
+            self.init_face_model()
+        else:
+            print("⚠️ Duplicate check DISABLED (set ENABLE_DUPLICATE_CHECK=True to enable)")
+    
+    def load_embeddings(self):
+        """Load embeddings hiện có từ file"""
+        if not CaptureConfig.EMBEDDINGS_FILE.exists():
+            print("⚠️ No embeddings file found. Duplicate check disabled.")
+            self.enabled = False
+            return
+        
+        try:
+            with open(CaptureConfig.EMBEDDINGS_FILE, 'rb') as f:
+                self.embeddings_db = pickle.load(f)
+            print(f"✅ Loaded {len(self.embeddings_db)} students for duplicate check")
+        except Exception as e:
+            print(f"❌ Error loading embeddings: {e}")
+            self.enabled = False
+    
+    def init_face_model(self):
+        """Khởi tạo InsightFace model"""
+        try:
+            print("🔄 Loading InsightFace for duplicate check...")
+            self.face_app = FaceAnalysis(providers=['CPUExecutionProvider'])
+            self.face_app.prepare(ctx_id=0, det_size=(640, 640))
+            print("✅ InsightFace loaded")
+        except Exception as e:
+            print(f"❌ Error loading InsightFace: {e}")
+            self.enabled = False
+    
+    def check_duplicate(self, frame, target_student_id):
+        """Kiểm tra xem khuôn mặt trong frame có trùng với sinh viên khác không
+        
+        Args:
+            frame: Frame ảnh từ camera
+            target_student_id: ID sinh viên đang chụp
+            
+        Returns:
+            tuple: (is_duplicate, matched_student_id, similarity_score)
+        """
+        # Nếu tắt duplicate check → luôn trả về False (không trùng)
+        if not self.enabled or not self.face_app:
+            return False, None, 0.0
+        
+        try:
+            # Detect và extract embedding
+            faces = self.face_app.get(frame)
+            
+            if not faces:
+                return False, None, 0.0
+            
+            # Lấy khuôn mặt đầu tiên
+            face_embedding = faces[0].embedding
+            
+            # So sánh với tất cả sinh viên trong DB (trừ chính nó)
+            for student_id, embeddings_list in self.embeddings_db.items():
+                # Bỏ qua chính sinh viên đang chụp
+                if student_id == target_student_id:
+                    continue
+                
+                # So sánh với tất cả embeddings của sinh viên này
+                for stored_embedding in embeddings_list:
+                    similarity = self.cosine_similarity(face_embedding, stored_embedding)
+                    
+                    # Nếu similarity cao → trùng với sinh viên khác
+                    if similarity >= CaptureConfig.DUPLICATE_THRESHOLD:
+                        return True, student_id, similarity
+            
+            return False, None, 0.0
+        
+        except Exception as e:
+            print(f"❌ Duplicate check error: {e}")
+            return False, None, 0.0
+    
+    @staticmethod
+    def cosine_similarity(emb1, emb2):
+        """Tính cosine similarity"""
+        return np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+    
+    def close(self):
+        """Cleanup resources"""
+        if self.face_app:
+            del self.face_app
+        self.face_app = None
 
 
 # ============================================================================
@@ -346,16 +457,18 @@ class FaceProcessor:
 class CameraCaptureWindow:
     """Cửa sổ chụp ảnh khuôn mặt"""
     
-    def __init__(self, parent, student_id, student_name):
+    def __init__(self, parent, student_id, student_name, on_complete=None):
         """
         Args:
             parent: Cửa sổ cha
             student_id: MSSV
             student_name: Tên sinh viên
+            on_complete: Callback khi hoàn thành chụp (nhận student_id)
         """
         self.parent = parent
         self.student_id = student_id
         self.student_name = student_name
+        self.on_complete = on_complete
         
         # Create window
         self.window = tk.Toplevel(parent)
@@ -372,7 +485,11 @@ class CameraCaptureWindow:
         # Components
         self.stream = None
         self.processor = FaceProcessor()
+        self.duplicate_checker = DuplicateChecker()  # 🔥 Thêm duplicate checker
         self.photo_label = None
+        
+        # Tracking
+        self.duplicate_warnings = 0  # Số lần cảnh báo trùng lặp
         
         # Create UI
         self.create_widgets()
@@ -498,7 +615,17 @@ class CameraCaptureWindow:
                     text=f"🎉 Hoàn thành! Đã chụp {self.capture_count} ảnh",
                     fg=COLORS["success"]
                 )
-                messagebox.showinfo("Thành công", f"Đã chụp đủ {CaptureConfig.TARGET_PHOTOS} ảnh!\n\nLưu tại: dataset/processed/{self.student_id}/")
+                messagebox.showinfo(
+                    "Thành công", 
+                    f"Đã chụp đủ {CaptureConfig.TARGET_PHOTOS} ảnh!\n\n"
+                    f"Lưu tại: dataset/processed/{self.student_id}/\n\n"
+                    "Đang trích xuất embeddings..."
+                )
+                
+                # 🔥 GỌI CALLBACK để extract embeddings ngay sau khi chụp xong
+                if self.on_complete:
+                    self.on_complete(self.student_id)
+                
             return
         
         frame = self.stream.read()
@@ -531,8 +658,47 @@ class CameraCaptureWindow:
                 
                 # Lưu ảnh tốt nhất
                 if best_face:
-                    self.save_photo(best_face[0], best_face[1], frame=frame)
-                    self.last_capture_time = current_time
+                    should_save = True  # Mặc định là lưu
+                    
+                    # 🔥 KIỂM TRA TRÙNG LẶP (nếu được bật)
+                    if CaptureConfig.ENABLE_DUPLICATE_CHECK:
+                        is_duplicate, matched_id, similarity = self.duplicate_checker.check_duplicate(
+                            frame, self.student_id
+                        )
+                        
+                        if is_duplicate:
+                            should_save = False  # Không lưu nếu trùng
+                            
+                            # Cảnh báo trùng lặp
+                            self.duplicate_warnings += 1
+                            print(f"⚠️ DUPLICATE DETECTED! Face matches {matched_id} (similarity: {similarity:.3f})")
+                            
+                            # Hiển thị cảnh báo trên UI
+                            self.status_label.config(
+                                text=f"⚠️ CẢNH BÁO: Khuôn mặt trùng với sinh viên {matched_id}!",
+                                fg=COLORS["danger"]
+                            )
+                            
+                            # Nếu cảnh báo quá 3 lần → dừng chụp
+                            if self.duplicate_warnings >= 3:
+                                self.auto_capture = False
+                                messagebox.showwarning(
+                                    "Phát hiện trùng lặp",
+                                    f"⚠️ Khuôn mặt đang chụp trùng với sinh viên khác trong hệ thống!\n\n"
+                                    f"Sinh viên trùng: {matched_id}\n"
+                                    f"Độ tương đồng: {similarity:.2%}\n\n"
+                                    f"Vui lòng kiểm tra lại:\n"
+                                    f"1. Đúng người đang chụp không?\n"
+                                    f"2. Sinh viên {matched_id} đã có trong hệ thống chưa?\n\n"
+                                    f"Nhấn 'Tiếp tục' để chụp lại hoặc 'Đóng' để hủy."
+                                )
+                                self.toggle_auto()  # Chuyển sang chế độ tạm dừng
+                    
+                    # Lưu ảnh (nếu không trùng hoặc không bật check)
+                    if should_save:
+                        self.save_photo(best_face[0], best_face[1], frame=frame)
+                        self.last_capture_time = current_time
+                        self.duplicate_warnings = 0  # Reset cảnh báo
         
         # Draw faces
         for detection in detections:
@@ -583,30 +749,33 @@ class CameraCaptureWindow:
         self.window.after(30, self.update_video)
     
     def save_photo(self, face_img, quality_info, frame=None):
-        """Lưu ảnh khuôn mặt đã crop + tiền xử lý
+        """Lưu ảnh TOÀN DIỆN từ camera (frame gốc)
         
         Args:
-            face_img: Ảnh khuôn mặt đã crop (NGUYÊN BẢN, chưa resize)
+            face_img: Ảnh khuôn mặt đã crop (chỉ dùng để check quality)
             quality_info: Thông tin chất lượng
-            frame: Frame gốc (không dùng)
+            frame: Frame gốc từ camera (LƯU CÁI NÀY!)
         """
         try:
-            # 🔥 LƯU ẢNH GỐC - KHÔNG TIỀN XỬ LÝ!
-            # InsightFace sẽ tự detect → align → resize → extract
-            # Chỉ cần ảnh crop BGR nguyên bản
+            # 🔥 LƯU FRAME GỐC TOÀN DIỆN - KHÔNG CROP, KHÔNG RESIZE!
+            # Frame nguyên bản từ ESP32-CAM
             
             # Tạo filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
             quality_str = f"q{int(quality_info['overall'])}"
             filename = f"{self.student_id}_{timestamp}_{quality_str}.jpg"
             
-            # Lưu ảnh CROP GỐC (BGR, kích thước tự nhiên từ detection)
+            # Lưu FRAME GỐC (toàn bộ ảnh từ camera, không crop)
             save_dir = CaptureConfig.DATASET_PROCESSED / self.student_id
             save_path = save_dir / filename
-            cv2.imwrite(str(save_path), face_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
             
-            self.capture_count += 1
-            print(f"✅ Saved {self.capture_count}/{CaptureConfig.TARGET_PHOTOS}: {filename} (Size: {face_img.shape})")
+            if frame is not None:
+                # Lưu frame gốc
+                cv2.imwrite(str(save_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
+                self.capture_count += 1
+                print(f"✅ Saved {self.capture_count}/{CaptureConfig.TARGET_PHOTOS}: {filename} (Size: {frame.shape}) - FULL FRAME")
+            else:
+                print(f"⚠️ Frame is None, skipping save")
             
         except Exception as e:
             print(f"❌ Save error: {e}")

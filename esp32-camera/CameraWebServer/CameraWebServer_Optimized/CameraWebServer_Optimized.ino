@@ -50,8 +50,8 @@
 #endif
 
 // WiFi Configuration
-const char* ssid = "K9";
-const char* password = "nk111111";
+const char* ssid = "TEAZONE_2.4G";
+const char* password = "88888888";
 
 // Global variables
 httpd_handle_t stream_httpd = NULL;

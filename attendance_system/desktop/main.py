@@ -9,6 +9,42 @@ from api_client import APIClient
 from student_module_new import StudentModuleNew
 from attendance_module import AttendanceModule
 
+# Import các module mới
+try:
+    from subject_module import SubjectManagementWindow
+    SUBJECT_MODULE_AVAILABLE = True
+except ImportError:
+    SUBJECT_MODULE_AVAILABLE = False
+    print("⚠️ Subject module not available")
+
+try:
+    from class_module import ClassManagementWindow
+    CLASS_MODULE_AVAILABLE = True
+except ImportError:
+    CLASS_MODULE_AVAILABLE = False
+    print("⚠️ Class module not available")
+
+try:
+    from session_module import SessionManagementWindow
+    SESSION_MODULE_AVAILABLE = True
+except ImportError:
+    SESSION_MODULE_AVAILABLE = False
+    print("⚠️ Session module not available")
+
+try:
+    from teacher_module import TeacherManagementWindow
+    TEACHER_MODULE_AVAILABLE = True
+except ImportError:
+    TEACHER_MODULE_AVAILABLE = False
+    print("⚠️ Teacher module not available")
+
+try:
+    from attendance_history_module import AttendanceHistoryWindow
+    HISTORY_MODULE_AVAILABLE = True
+except ImportError:
+    HISTORY_MODULE_AVAILABLE = False
+    print("⚠️ Attendance history module not available")
+
 
 # ============================================================================
 # COLOR SCHEME
@@ -27,6 +63,8 @@ COLORS = {
     "info_dark": "#0097A7",    # Dark Cyan
     "purple": "#9C27B0",       # Purple
     "purple_dark": "#7B1FA2",  # Dark Purple
+    "teal": "#009688",         # Teal
+    "teal_dark": "#00796B",    # Dark Teal
     "deep_orange": "#FF5722",  # Deep Orange
     "deep_orange_dark": "#E64A19", # Dark Deep Orange
     "blue_grey": "#607D8B",    # Blue Grey
@@ -433,6 +471,13 @@ class MainApplication:
                 "cmd": self.open_attendance
             },
             {
+                "name": "Lịch sử Điểm danh",
+                "icon": "📋",
+                "color": COLORS["teal"],
+                "hover": COLORS["teal_dark"],
+                "cmd": self.open_attendance_history
+            },
+            {
                 "name": "Quản lý Camera",
                 "icon": "📷",
                 "color": COLORS["deep_orange"],
@@ -553,27 +598,58 @@ class MainApplication:
     
     def open_teachers(self):
         """Mở module quản lý giảng viên"""
-        messagebox.showinfo("Coming Soon", "Module Quản lý Giảng viên đang phát triển...")
+        if TEACHER_MODULE_AVAILABLE:
+            TeacherManagementWindow(self.root)
+        else:
+            messagebox.showerror("Lỗi", "Module Quản lý Giảng viên chưa được cài đặt!")
     
     def open_subjects(self):
         """Mở module quản lý môn học"""
-        messagebox.showinfo("Coming Soon", "Module Quản lý Môn học đang phát triển...")
+        if SUBJECT_MODULE_AVAILABLE:
+            SubjectManagementWindow(self.root)
+        else:
+            messagebox.showerror("Lỗi", "Module Quản lý Môn học chưa được cài đặt!")
     
     def open_classes(self):
         """Mở module quản lý lớp học"""
-        messagebox.showinfo("Coming Soon", "Module Quản lý Lớp học đang phát triển...")
+        if CLASS_MODULE_AVAILABLE:
+            ClassManagementWindow(self.root)
+        else:
+            messagebox.showerror("Lỗi", "Module Quản lý Lớp học chưa được cài đặt!")
     
     def open_sessions(self):
         """Mở module quản lý buổi học"""
-        messagebox.showinfo("Coming Soon", "Module Quản lý Buổi học đang phát triển...")
+        if SESSION_MODULE_AVAILABLE:
+            SessionManagementWindow(self.root)
+        else:
+            messagebox.showinfo("Coming Soon", "Module Quản lý Buổi học đang phát triển...")
     
     def open_attendance(self):
-        """Mở module điểm danh"""
-        AttendanceModule(self.root, self.api)
+        """Mở module chọn buổi học để điểm danh"""
+        try:
+            from attendance_session_module import SessionSelectionWindow
+            SessionSelectionWindow(self.root)
+        except ImportError as e:
+            print(f"❌ Error importing attendance module: {e}")
+            messagebox.showerror("Lỗi", "Không thể mở module điểm danh!")
     
     def open_cameras(self):
         """Mở module quản lý camera"""
         messagebox.showinfo("Coming Soon", "Module Quản lý Camera đang phát triển...")
+    
+    def open_attendance_history(self):
+        """Mở module lịch sử điểm danh"""
+        if not HISTORY_MODULE_AVAILABLE:
+            messagebox.showwarning("Chưa có", "Module Lịch sử điểm danh chưa được cài đặt!")
+            return
+        
+        try:
+            AttendanceHistoryWindow(self.root)
+        except Exception as e:
+            print(f"❌ Error opening attendance history: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Lỗi", f"Không thể mở module lịch sử:\n{str(e)}")
     
     def open_reports(self):
         """Mở module báo cáo"""
