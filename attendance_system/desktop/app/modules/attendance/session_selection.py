@@ -377,7 +377,7 @@ class SessionSelectionWindow:
         self.window.destroy()
         
         # Import and open attendance window
-        from attendance_live_module import AttendanceLiveWindow
+        from app.modules.attendance.live_attendance import AttendanceLiveWindow
         AttendanceLiveWindow(self.parent, self.selected_session)
 
 

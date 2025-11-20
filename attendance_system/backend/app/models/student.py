@@ -1,13 +1,7 @@
-﻿"""
-Student Model
-TODO: Copy from _models_old.py and adapt
-"""
-from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Text, ForeignKey
+﻿from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
-from app.models.base import Base
-
+from app.core.database import Base
 
 class Student(Base):
     """Bảng students - Thông tin sinh viên"""
@@ -29,8 +23,8 @@ class Student(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # TODO: Add relationships when other models are created
-    # user = relationship("User", back_populates="student")
-    # face_encodings = relationship("FaceEncoding", back_populates="student")
-    # attendances = relationship("Attendance", back_populates="student")
-    # enrollments = relationship("ClassEnrollment", back_populates="student")
+    # Relationships
+    user = relationship("User", back_populates="student")
+    face_encodings = relationship("FaceEncoding", back_populates="student")
+    attendances = relationship("Attendance", back_populates="student")
+    enrollments = relationship("ClassEnrollment", back_populates="student")

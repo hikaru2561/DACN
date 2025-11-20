@@ -11,12 +11,13 @@ import os
 from PIL import Image, ImageTk
 
 # Import camera module nếu có
+# Import camera module nếu có
 try:
-    from camera_capture_module import CameraCaptureWindow
+    from app.modules.camera.capture import CameraCaptureWindow
     CAMERA_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     CAMERA_AVAILABLE = False
-    print("⚠️ Camera module not available")
+    print(f"⚠️ Camera module not available: {e}")
 
 
 # ============================================================================
@@ -694,10 +695,10 @@ class StudentModuleNew:
         student_id = self.current_student.get('student_id')
         full_name = self.current_student.get('full_name', 'Unknown')
         
-        # Đường dẫn thư mục ảnh sinh viên
-        # desktop -> attendance_system -> DACN
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        student_folder = os.path.join(base_dir, 'dataset', 'processed', student_id)
+        # Đường dẫn thư mục ảnh sinh viên (dùng config)
+        from app.core.config import PATHS
+        student_folder = PATHS["processed_dir"] / student_id
+        student_folder = str(student_folder)  # Convert Path to string
         
         if not os.path.exists(student_folder):
             messagebox.showinfo(

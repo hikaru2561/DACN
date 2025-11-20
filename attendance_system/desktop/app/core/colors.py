@@ -26,6 +26,18 @@ COLORS = {
     "camera": "#FF5722",       # Deep Orange
     "report": "#607D8B",       # Blue Grey
     
+    # Additional colors for dashboard
+    "purple": "#9C27B0",
+    "purple_dark": "#7B1FA2",
+    "teal": "#009688",
+    "teal_dark": "#00796B",
+    "deep_orange": "#FF5722",
+    "deep_orange_dark": "#E64A19",
+    "blue_grey": "#607D8B",
+    "blue_grey_dark": "#455A64",
+    "red": "#E74C3C",
+
+    
     # Neutral colors
     "dark": "#212121",
     "light": "#FAFAFA",

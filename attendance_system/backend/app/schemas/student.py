@@ -1,18 +1,7 @@
-﻿"""
-Student Schemas
-TODO: Copy from _schemas_old.py and adapt
-"""
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+﻿from pydantic import BaseModel, EmailStr
 from datetime import date, datetime
-from enum import Enum
-
-
-class GenderEnum(str, Enum):
-    MALE = "Nam"
-    FEMALE = "Nữ"
-    OTHER = "Khác"
-
+from typing import Optional
+from .common import GenderEnum
 
 class StudentBase(BaseModel):
     student_id: str
@@ -49,7 +38,7 @@ class StudentResponse(StudentBase):
     photo_path: Optional[str]
     is_active: bool
     created_at: datetime
-    face_count: Optional[int] = 0
+    face_count: Optional[int] = 0  # Số lượng ảnh khuôn mặt
     
     class Config:
         from_attributes = True

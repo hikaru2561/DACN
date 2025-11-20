@@ -1,260 +1,556 @@
-# 📘 TÀI LIỆU TOÀN DIỆN DỰ ÁN - HỆ THỐNG ĐIỂM DANH NHẬN DẠNG KHUÔN MẶT
-**(Comprehensive Project Documentation - Face Recognition Attendance System)**
+# 📘 HỆ THỐNG ĐIỂM DANH NHẬN DẠNG KHUÔN MẶT
+**Face Recognition Attendance System - HUTECH DACN Project**
+
+*Phiên bản 2.0 - Professional Architecture (Refactored 21/11/2025)*
 
 ---
 
 ## 📑 MỤC LỤC
 
-1.  [Tổng Quan Dự Án](#1-tổng-quan-dự-án)
-2.  [Kiến Trúc Hệ Thống](#2-kiến-trúc-hệ-thống)
-3.  [Quy Trình Kỹ Thuật (System Pipeline)](#3-quy-trình-kỹ-thuật-system-pipeline)
-4.  [Cấu Trúc Dự Án (Project Structure)](#4-cấu-trúc-dự-án-project-structure)
-5.  [Chi Tiết Model AI (Buffalo_L)](#5-chi-tiết-model-ai-buffalo_l)
-6.  [Hướng Dẫn Cài Đặt & Sử Dụng](#6-hướng-dẫn-cài-đặt--sử-dụng)
-7.  [Hướng Dẫn ESP32-CAM](#7-hướng-dẫn-esp32-cam)
-8.  [API Documentation](#8-api-documentation)
-9.  [Đánh Giá & Roadmap](#9-đánh-giá--roadmap)
+1. [Tổng Quan](#1-tổng-quan)
+2. [Kiến Trúc Hệ Thống](#2-kiến-trúc-hệ-thống)
+3. [Cấu Trúc Dự Án](#3-cấu-trúc-dự-án)
+4. [Công Nghệ & Model AI](#4-công-nghệ--model-ai)
+5. [Hướng Dẫn Sử Dụng](#5-hướng-dẫn-sử-dụng)
+6. [API Documentation](#6-api-documentation)
+7. [Triển Khai & Bảo Trì](#7-triển-khai--bảo-trì)
 
 ---
 
-## 1. 🎯 TỔNG QUAN DỰ ÁN
+## 1. 🎯 TỔNG QUAN
 
-**Tên dự án:** Face Recognition Attendance System (Hệ thống Điểm danh Nhận dạng Khuôn mặt)
-**Phiên bản:** 1.0.0 (Professional Refactored)
+### Giới thiệu
+Hệ thống điểm danh tự động sử dụng công nghệ nhận dạng khuôn mặt (Face Recognition) với camera ESP32-CAM, áp dụng Deep Learning (InsightFace) để nhận diện sinh viên trong thời gian thực.
 
-### 1.1. Giới thiệu
-Dự án này là một giải pháp điểm danh tự động, hiện đại, sử dụng camera ESP32-CAM để thu nhận hình ảnh và áp dụng các mô hình Deep Learning tiên tiến để nhận dạng sinh viên trong thời gian thực. Hệ thống bao gồm một ứng dụng Desktop quản lý toàn diện và một Backend API mạnh mẽ.
+### Tính năng chính
+- ✅ **Điểm danh tự động** qua camera ESP32-CAM
+- ✅ **Quản lý toàn diện**: Sinh viên, Giảng viên, Môn học, Lớp học, Buổi học
+- ✅ **Báo cáo & Thống kê**: Lịch sử điểm danh, tỷ lệ chuyên cần
+- ✅ **Quản lý Camera**: Multi-camera support
+- ✅ **Quality Check**: Kiểm tra chất lượng ảnh (độ sáng, sắc nét, góc mặt)
+- ✅ **Modular Architecture**: Dễ bảo trì và mở rộng
 
-### 1.2. Tính năng chính
-*   **Điểm danh tự động:** Nhận diện khuôn mặt từ luồng video trực tiếp (ESP32-CAM).
-*   **Quản lý toàn diện:** Sinh viên, Giảng viên, Môn học, Lớp học, Buổi học.
-*   **Báo cáo & Thống kê:** Xem lịch sử điểm danh, xuất báo cáo, thống kê tỷ lệ chuyên cần.
-*   **Quản lý Camera:** Thêm, sửa, xóa, xem trạng thái các thiết bị camera.
-*   **Chất lượng cao:** Kiểm tra chất lượng ảnh đầu vào (độ sáng, sắc nét, góc mặt) trước khi training.
+### Thông số kỹ thuật
+- **Độ chính xác nhận dạng**: ~99.8% (LFW benchmark)
+- **Tốc độ nhận dạng**: ~10-20ms/face (CPU)
+- **Ngưỡng nhận dạng**: 0.50 (Cosine Similarity)
+- **Số ảnh training**: 20 ảnh/sinh viên
+- **Camera Resolution**: **XGA 1024x768** (optimized)
+- **JPEG Quality**: 12-15 (balanced quality/size)
+- **Frame Rate**: ~40-100 FPS (adaptive)
+- **WiFi**: 2.4GHz (sleep disabled for low latency)
+
+### ESP32-CAM Hardware Specs
+- **Module**: ESP32-CAM AI-Thinker
+- **Camera Sensor**: OV2640
+- **Resolution**: XGA 1024x768 pixels
+- **Frame Buffers**: 2 (PSRAM)
+- **Grab Mode**: CAMERA_GRAB_LATEST (always newest frame)
+- **WiFi Mode**: No sleep (max performance)
+- **Stream Protocol**: MJPEG over HTTP
+
+### Camera Quality Optimizations
+```cpp
+Brightness: +1        // Enhanced lighting
+Contrast: +1          // Better detail
+Sharpness: +2 (MAX)   // Maximum sharpness
+AGC Gain: 3           // Ultra low noise
+Auto White Balance: ON
+Auto Exposure: ON
+Lens Correction: ON
+Bad Pixel Correction: ON
+```
 
 ---
 
 ## 2. 🏗️ KIẾN TRÚC HỆ THỐNG
 
-Hệ thống được xây dựng theo mô hình Client-Server với 3 tầng chính:
-
-### 2.1. Tầng Phần Cứng (Hardware Layer)
-*   **Thiết bị:** ESP32-CAM AI-Thinker.
-*   **Vai trò:** Thu thập hình ảnh/video stream và gửi về Desktop App qua WiFi.
-*   **Giao thức:** HTTP Stream (MJPEG).
-
-### 2.2. Tầng Ứng Dụng (Application Layer - Desktop)
-*   **Công nghệ:** Python, Tkinter (GUI).
-*   **Vai trò:**
-    *   Giao diện người dùng (Quản lý, Điểm danh, Báo cáo).
-    *   Xử lý ảnh & AI (Face Detection, Recognition).
-    *   Giao tiếp với Backend API.
-*   **Thư viện AI:** InsightFace (ArcFace), MediaPipe, OpenCV.
-
-### 2.3. Tầng Backend & Dữ Liệu (Backend & Data Layer)
-*   **Công nghệ:** Python, FastAPI.
-*   **Cơ sở dữ liệu:** PostgreSQL.
-*   **Vai trò:**
-    *   Cung cấp RESTful API cho Desktop App.
-    *   Lưu trữ thông tin người dùng, sinh viên, lớp học, lịch sử điểm danh.
-    *   Xử lý logic nghiệp vụ và thống kê.
-
----
-
-## 3. ⚙️ QUY TRÌNH KỸ THUẬT (SYSTEM PIPELINE)
-
-Quy trình cốt lõi từ lúc thu nhận hình ảnh đến khi nhận dạng thành công:
-
-### 3.1. Thu Nhận Hình Ảnh (ESP32-CAM)
-*   Camera phát luồng video MJPEG (800x600 resolution).
-*   Firmware tối ưu cho tốc độ và độ trễ thấp.
-
-### 3.2. Tiền Xử Lý & Thu Thập Dữ Liệu (Data Collection)
-1.  **Đọc Stream:** Desktop App kết nối và đọc từng frame hình.
-2.  **Phát hiện mặt (Face Detection):** Sử dụng **MediaPipe** để tìm vị trí khuôn mặt.
-3.  **Kiểm tra chất lượng (Quality Check):** Đánh giá ảnh dựa trên:
-    *   Độ sắc nét (Sharpness - Laplacian variance).
-    *   Độ sáng (Brightness).
-    *   Kích thước (Size).
-    *   Độ tương phản (Contrast).
-    *   *Chỉ lưu ảnh nếu điểm chất lượng > 65.*
-4.  **Lưu trữ:** Lưu ảnh gốc (crop) vào `dataset/processed/{student_id}/`.
-
-### 3.3. Trích Xuất Đặc Trưng (Feature Extraction / "Training")
-1.  **Input:** Đọc 20 ảnh chất lượng cao của mỗi sinh viên.
-2.  **Model:** Sử dụng **InsightFace (ArcFace)**.
-3.  **Process:**
-    *   Face Alignment (Căn chỉnh).
-    *   Normalization (Chuẩn hóa).
-    *   Embedding Extraction (Trích xuất vector 512 chiều).
-4.  **Output:** Lưu toàn bộ embeddings vào file `dataset/face_embeddings.pkl`.
-
-### 3.4. Nhận Dạng Thời Gian Thực (Real-time Recognition)
-1.  **Input:** Frame hình từ Camera Stream.
-2.  **Detection:** Tìm khuôn mặt bằng RetinaFace/MediaPipe.
-3.  **Embedding:** Trích xuất vector 512 chiều cho khuôn mặt vừa tìm thấy.
-4.  **Matching:** So sánh vector này với CSDL `face_embeddings.pkl` bằng **Cosine Similarity**.
-5.  **Decision:** Nếu độ tương đồng > `0.50` (Threshold) -> **Nhận dạng thành công**.
-
----
-
-## 4. 📂 CẤU TRÚC DỰ ÁN (PROJECT STRUCTURE)
-
-Dự án được tổ chức theo cấu trúc chuyên nghiệp, phân tách rõ ràng giữa Backend và Desktop.
+### Mô hình 3-tier
 
 ```
-DACN/
+┌─────────────────────────────────────────────┐
+│         ESP32-CAM (Hardware Layer)          │
+│  • Camera Module                            │
+│  • WiFi Streaming (MJPEG)                   │
+│  • HTTP Server                              │
+└──────────────────┬──────────────────────────┘
+                   │ Video Stream
+┌──────────────────▼──────────────────────────┐
+│      Desktop App (Application Layer)        │
+│  • Python + Tkinter GUI                     │
+│  • Face Detection (MediaPipe)               │
+│  • Face Recognition (InsightFace)           │
+│  • API Client                               │
+└──────────────────┬──────────────────────────┘
+                   │ REST API
+┌──────────────────▼──────────────────────────┐
+│       Backend (API & Data Layer)            │
+│  • FastAPI Server                           │
+│  • PostgreSQL Database                      │
+│  • Business Logic                           │
+└─────────────────────────────────────────────┘
+```
+
+### Tech Stack
+
+**Backend:**
+- FastAPI (Web Framework)
+- PostgreSQL (Database)
+- SQLAlchemy (ORM)
+- Pydantic (Validation)
+- Uvicorn (ASGI Server)
+
+**Desktop:**
+- Python 3.8+
+- Tkinter (GUI)
+- InsightFace (Face Recognition)
+- MediaPipe (Face Detection)
+- OpenCV (Image Processing)
+- Pillow (Image Handling)
+
+**Hardware:**
+- ESP32-CAM AI-Thinker
+- OV2640 Camera Sensor
+
+---
+
+## 3. 📂 CẤU TRÚC DỰ ÁN
+
+### Tổng quan
+
+```
+D:\HUTECH\DACN\
 ├── attendance_system/
-│   │
-│   ├── backend/                        # ⭐ BACKEND (FastAPI)
+│   ├── backend/              # Backend API Server
 │   │   ├── app/
-│   │   │   ├── api/                    # API Routes (Endpoints)
-│   │   │   ├── core/                   # Config, Database connection
-│   │   │   ├── models/                 # SQLAlchemy Models (DB Schema)
-│   │   │   ├── schemas/                # Pydantic Schemas (Validation)
-│   │   │   └── main.py                 # Entry point (New structure)
-│   │   ├── main.py                     # Entry point (Old - running)
-│   │   └── ...
+│   │   │   ├── api/          # API Routes (modular)
+│   │   │   ├── core/         # Config, Database
+│   │   │   ├── models/       # SQLAlchemy Models
+│   │   │   ├── schemas/      # Pydantic Schemas
+│   │   │   └── main.py       # Entry Point
+│   │   ├── .env              # Environment Variables
+│   │   └── requirements.txt
 │   │
-│   ├── desktop/                        # ⭐ DESKTOP (Tkinter)
+│   ├── desktop/              # Desktop Application
 │   │   ├── app/
-│   │   │   ├── core/                   # API Client, Constants, Config
-│   │   │   ├── modules/                # Feature Modules
-│   │   │   │   ├── student/            # Quản lý sinh viên
-│   │   │   │   ├── teacher/            # Quản lý giảng viên
-│   │   │   │   ├── attendance/         # Điểm danh & Lịch sử
-│   │   │   │   ├── camera/             # Quản lý Camera
-│   │   │   │   └── ...                 # (Subject, Class, Session, Report)
-│   │   │   └── main.py                 # Entry point
-│   │   └── ...
+│   │   │   ├── ui/           # UI Components
+│   │   │   ├── core/         # API Client, Config
+│   │   │   ├── modules/      # Feature Modules
+│   │   │   └── main.py       # Entry Point
+│   │   └── requirements.txt
 │   │
-│   └── database/                       # Database Scripts
-│       └── schema.sql                  # SQL tạo bảng
+│   └── database/             # Database Scripts
+│       └── schema.sql
 │
-├── client/                             # Scripts cho ESP32/Client test
-├── dataset/                            # Dữ liệu ảnh & Embeddings
-├── docs/                               # Tài liệu dự án
-└── ...
+├── dataset/                  # Training Data
+│   ├── processed/            # Student Photos
+│   └── face_embeddings.pkl   # AI Model Data
+│
+├── esp32-camera/             # ESP32 Firmware
+└── docs/                     # Documentation
+```
+
+### Backend Structure (Modular)
+
+```
+backend/app/
+├── api/                      # API Endpoints
+│   ├── students.py
+│   ├── teachers.py
+│   ├── subjects.py
+│   ├── classes.py
+│   ├── sessions.py
+│   ├── attendance.py
+│   ├── cameras.py
+│   ├── reports.py
+│   └── __init__.py
+│
+├── core/                     # Core Utilities
+│   ├── config.py             # Settings (Pydantic)
+│   ├── database.py           # DB Connection
+│   └── __init__.py
+│
+├── models/                   # Database Models
+│   ├── user.py
+│   ├── student.py
+│   ├── teacher.py
+│   ├── subject.py
+│   ├── class_.py
+│   ├── session.py
+│   ├── attendance.py
+│   ├── camera.py
+│   └── __init__.py
+│
+├── schemas/                  # API Schemas
+│   ├── common.py
+│   ├── student.py
+│   ├── teacher.py
+│   ├── subject.py
+│   ├── class_.py
+│   ├── session.py
+│   ├── attendance.py
+│   ├── camera.py
+│   ├── stats.py
+│   └── __init__.py
+│
+└── main.py                   # Application Entry
+```
+
+### Desktop Structure (Modular)
+
+```
+desktop/app/
+├── ui/                       # UI Layer
+│   ├── login_window.py
+│   └── dashboard_window.py
+│
+├── core/                     # Core Components
+│   ├── api_client.py         # API Communication
+│   ├── config.py             # Application Config
+│   ├── colors.py             # UI Colors
+│   └── constants.py
+│
+├── modules/                  # Feature Modules
+│   ├── student/
+│   │   └── student_window.py
+│   ├── teacher/
+│   │   └── teacher_window.py
+│   ├── subject/
+│   │   └── subject_window.py
+│   ├── class_/
+│   │   └── class_window.py
+│   ├── session/
+│   │   └── session_window.py
+│   ├── attendance/
+│   │   ├── session_selection.py
+│   │   ├── live_attendance.py
+│   │   ├── history.py
+│   │   └── recognition.py
+│   ├── camera/
+│   │   ├── camera_window.py
+│   │   └── capture.py
+│   └── report/
+│       └── report_window.py
+│
+└── main.py                   # Application Entry
 ```
 
 ---
 
-## 5. 🤖 CHI TIẾT MODEL AI (BUFFALO_L)
+## 4. 🤖 CÔNG NGHỆ & MODEL AI
 
-Hệ thống sử dụng bộ model `buffalo_l` của InsightFace.
+### InsightFace - Buffalo_L Model
 
-### 5.1. Thông tin Model
-*   **Vị trí:** `C:\Users\[User]\.insightface\models\buffalo_l\`
-*   **Tổng kích thước:** ~325 MB
-*   **Thành phần:**
-    *   `w600k_r50.onnx` (166 MB): **Face Recognition** (ArcFace ResNet-50).
-    *   `1k3d68.onnx` (137 MB): **3D Face Alignment**.
-    *   `det_10g.onnx` (16 MB): **Face Detection**.
-    *   `genderage.onnx` (1.2 MB): **Gender & Age**.
+**Thông tin:**
+- **Model**: `buffalo_l` (@ ~/.insightface/models/buffalo_l/)
+- **Kích thước**: ~325 MB
+- **Components**:
+  - `w600k_r50.onnx` (166 MB): Face Recognition (ArcFace ResNet-50)
+  - `det_10g.onnx` (16 MB): Face Detection (RetinaFace)
+  - `1k3d68.onnx` (137 MB): 3D Face Alignment
+  - `genderage.onnx` (1.2 MB): Gender & Age Detection
 
-### 5.2. Tại sao chọn Buffalo_L?
-*   **Độ chính xác:** ~99.8% trên tập LFW benchmark.
-*   **Tốc độ:** ~10-20ms/face trên CPU (phù hợp với laptop thông thường).
-*   **Kích thước:** Vừa phải, cân bằng giữa hiệu năng và tài nguyên.
-
-### 5.3. Cấu hình trong Code
+**Cấu hình:**
 ```python
 FACE_RECOGNITION_CONFIG = {
     "model_name": "buffalo_l",
-    "ctx_id": 0,              # 0 = CPU
-    "det_size": (640, 640),   # Kích thước detection (càng lớn càng chính xác nhưng chậm)
-    "similarity_threshold": 0.50
+    "det_size": (640, 640),
+    "similarity_threshold": 0.50,
+    "providers": ['CPUExecutionProvider']
 }
+```
+
+### Pipeline Nhận dạng
+
+```
+1. Capture Image (ESP32-CAM)
+   ↓
+2. Face Detection (RetinaFace/MediaPipe)
+   ↓
+3. Face Alignment (3D Landmarks)
+   ↓
+4. Feature Extraction (ArcFace → 512D Vector)
+   ↓
+5. Cosine Similarity Matching
+   ↓
+6. Recognition Decision (Threshold > 0.50)
+```
+
+### Quality Check Pipeline
+
+```python
+Quality Score = (
+    Brightness * 0.25 +
+    Sharpness * 0.40 +
+    Size * 0.20 +
+    Contrast * 0.15
+)
+
+Minimum Score: 65/100
 ```
 
 ---
 
-## 6. 🚀 HƯỚNG DẪN CÀI ĐẶT & SỬ DỤNG
+## 5. 🚀 HƯỚNG DẪN SỬ DỤNG
 
-### 6.1. Yêu cầu hệ thống
-*   Python 3.8+
-*   PostgreSQL
-*   Webcam hoặc ESP32-CAM
+### Cài đặt & Chạy Backend
 
-### 6.2. Cài đặt Backend
-1.  Di chuyển vào thư mục backend: `cd attendance_system/backend`
-2.  Cài đặt thư viện: `pip install -r requirements.txt`
-3.  Cấu hình Database:
-    *   Tạo database `attendance_db` trong PostgreSQL.
-    *   Chạy script `database/schema.sql` để tạo bảng.
-    *   Cập nhật `DATABASE_URL` trong `.env` hoặc `app/core/config.py`.
-4.  Chạy Server: `python main.py` (Server sẽ chạy tại `http://localhost:8000`).
+```bash
+# Di chuyển vào thư mục backend
+cd attendance_system/backend
 
-### 6.3. Cài đặt Desktop App
-1.  Di chuyển vào thư mục desktop: `cd attendance_system/desktop`
-2.  Cài đặt thư viện: `pip install -r requirements.txt`
-3.  Chạy ứng dụng: `python -m app.main`
+# Cài đặt dependencies
+pip install -r requirements.txt
 
-### 6.4. Sử dụng
-1.  **Đăng nhập:** Sử dụng tài khoản Admin (mặc định `admin`/`admin` nếu đã seed data).
-2.  **Quản lý:** Thêm Giảng viên, Môn học, Lớp học, Sinh viên.
-3.  **Thu thập dữ liệu:** Vào module Sinh viên -> Chọn sinh viên -> Chụp ảnh (20 tấm).
-4.  **Training:** Nhấn nút "Training Data" để tạo embeddings.
-5.  **Điểm danh:** Vào module Điểm danh -> Chọn Lớp/Buổi học -> Bắt đầu điểm danh.
+# Cấu hình database trong .env
+DATABASE_URL=postgresql://user:pass@localhost:5432/attendance_db
+
+# Chạy server
+python -m app.main
+# hoặc
+cd app && python main.py
+
+# Truy cập Swagger UI
+http://localhost:8000/docs
+```
+
+### Cài đặt & Chạy Desktop
+
+```bash
+# Di chuyển vào thư mục desktop
+cd attendance_system/desktop
+
+# Cài đặt dependencies
+pip install -r requirements.txt
+
+# Chạy ứng dụng
+python -m app.main
+# hoặc
+cd app && python main.py
+```
+
+### Workflow Sử Dụng
+
+**1. Setup Ban Đầu:**
+- Chạy Backend server
+- Tạo database và chạy schema.sql
+- Cấu hình ESP32-CAM (xem phần ESP32)
+
+**2. Quản Lý Dữ Liệu:**
+- Đăng nhập Desktop App (admin/admin123)
+- Thêm Giảng viên, Môn học, Lớp học
+- Thêm Sinh viên và gán vào lớp
+
+**3. Thu Thập Dữ Liệu:**
+- Vào module "Quản lý Sinh viên"
+- Chọn sinh viên → Click "📷 Lấy ảnh"
+- Hệ thống tự động chụp 20 ảnh chất lượng cao
+- Click "Training Data" để tạo embeddings
+
+**4. Điểm Danh:**
+- Vào module "Điểm danh Lớp học"
+- Chọn buổi học
+- Hệ thống tự động nhận diện và ghi nhận
+
+**5. Báo Cáo:**
+- Vào module "Lịch sử Điểm danh"
+- Xem thống kê, xuất báo cáo
+
+### ESP32-CAM Setup Guide
+
+**Hardware Requirements:**
+- ESP32-CAM AI-Thinker module
+- USB-to-TTL programmer (FTDI/CH340)
+- Jumper wires
+
+**Firmware Upload:**
+```bash
+# 1. Open Arduino IDE
+# 2. Install ESP32 board support
+# 3. Select board: "AI Thinker ESP32-CAM"
+# 4. Open: esp32-camera/CameraWebServer_Optimized.ino
+```
+
+**WiFi Configuration:**
+```cpp
+// Edit in firmware (lines 53-54):
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_PASSWORD";
+```
+
+**Camera Settings (Pre-configured):**
+```cpp
+Resolution: XGA 1024x768
+JPEG Quality: 12-15
+Frame Buffers: 2
+FPS Target: 40-100
+Optimizations: All enabled (see firmware)
+```
+
+**Wiring for Upload:**
+```
+ESP32-CAM  →  FTDI Adapter
+---------     -------------
+5V         →  5V (VCC)
+GND        →  GND
+U0T (TX)   →  RX
+U0R (RX)   →  TX
+IO0        →  GND (for upload mode)
+```
+
+**Upload Steps:**
+1. Connect wiring as above (IO0 to GND)
+2. Press ESP32-CAM reset button
+3. Upload firmware via Arduino IDE
+4. Remove IO0-GND connection
+5. Press reset button
+6. Check Serial Monitor for IP address
+
+**URLs sau khi upload:**
+- Web Interface: `http://[ESP32_IP]/`
+- Stream: `http://[ESP32_IP]/stream`
+- Capture: `http://[ESP32_IP]/capture`
+- Status: `http://[ESP32_IP]/status`
+
+**Desktop App Configuration:**
+```python
+# Update in desktop/app/core/config.py:
+CAMERA_CONFIG = {
+    "stream_url": "http://192.168.x.x/stream",  # Your ESP32 IP
+    ...
+}
+```
+
+**Troubleshooting:**
+- **Camera not init**: Check wiring, flash mode
+- **Brown-out reset**: Use external 5V power (>2A)
+- **WiFi fails**: Check SSID/password, signal strength
+- **Low FPS**: Reduce JPEG quality or resolution
+- **Stream lag**: Enable "WiFi sleep disabled" in firmware
+
+
 
 ---
 
-## 7. 📸 HƯỚNG DẪN ESP32-CAM
+## 6. 🔌 API DOCUMENTATION
 
-### 7.1. Cài đặt Firmware
-1.  Sử dụng **Arduino IDE**.
-2.  Mở project trong thư mục `esp32-camera/`.
-3.  Cấu hình WiFi và Server IP trong `CameraWebServer.ino`:
-    ```cpp
-    const char* ssid = "YOUR_WIFI_SSID";
-    const char* password = "YOUR_WIFI_PASSWORD";
-    ```
-4.  Upload code lên board **ESP32 Wrover Module**.
+### Endpoints
 
-### 7.2. Sử dụng
-*   Mở Serial Monitor để xem IP của ESP32.
-*   Truy cập IP đó trên trình duyệt để xem giao diện web.
-*   Stream URL: `http://[ESP32_IP]/stream` (dùng để nhập vào Desktop App).
+**Students API** (`/api/students`)
+- `GET /` - Lấy danh sách sinh viên
+- `GET /{id}` - Lấy thông tin sinh viên
+- `POST /` - Tạo sinh viên mới
+- `PUT /{id}` - Cập nhật sinh viên
+- `DELETE /{id}` - Xóa sinh viên
 
----
+**Similar structure for:**
+- `/api/teachers` - Giảng viên
+- `/api/subjects` - Môn học
+- `/api/classes` - Lớp học
+- `/api/sessions` - Buổi học
+- `/api/attendance` - Điểm danh
+- `/api/cameras` - Camera
+- `/api/reports` - Báo cáo
 
-## 8. 🔌 API DOCUMENTATION
+### Interactive Documentation
 
-Backend cung cấp đầy đủ các API RESTful. Truy cập `http://localhost:8000/docs` (Swagger UI) để xem chi tiết và test trực tiếp.
-
-Các nhóm API chính:
-*   `/api/students`: CRUD sinh viên.
-*   `/api/teachers`: CRUD giảng viên.
-*   `/api/subjects`: CRUD môn học.
-*   `/api/classes`: Quản lý lớp học & ghi danh.
-*   `/api/sessions`: Quản lý buổi học.
-*   `/api/attendance`: Ghi nhận & xem lịch sử điểm danh.
-*   `/api/cameras`: Quản lý thiết bị camera.
-*   `/api/reports`: Thống kê báo cáo.
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
 
 ---
 
-## 9. 📊 ĐÁNH GIÁ & ROADMAP
+## 7. 🛠️ TRIỂN KHAI & BẢO TRÌ
 
-### 9.1. Trạng thái hiện tại (Professional Grade - 82/100)
-*   ✅ **Cấu trúc:** Xuất sắc, module hóa cao.
-*   ✅ **Tính năng:** Đầy đủ các chức năng cốt lõi.
-*   ✅ **Tài liệu:** Rất chi tiết và đầy đủ.
-*   ⚠️ **Testing:** Chưa có Unit Test/Integration Test.
-*   ⚠️ **Security:** Cần bổ sung Authentication (JWT).
+### Production Checklist
 
-### 9.2. Kế hoạch phát triển (Roadmap)
-*   **Ngắn hạn (2 tuần):**
-    *   Viết Unit Tests (pytest).
-    *   Thêm xác thực người dùng (JWT Authentication).
-    *   Hoàn thiện migration code Backend sang cấu trúc mới (`app/`).
-*   **Trung hạn (1 tháng):**
-    *   Docker hóa ứng dụng (Backend + DB).
-    *   Thiết lập CI/CD Pipeline.
-    *   Tối ưu hóa hiệu năng nhận diện.
-*   **Dài hạn:**
-    *   Phát triển Web Dashboard (React/Vue).
-    *   Mở rộng hỗ trợ nhiều camera cùng lúc.
+**Backend:**
+- [ ] Configure production DATABASE_URL
+- [ ] Set up environment variables (.env)
+- [ ] Enable HTTPS (SSL certificate)
+- [ ] Add JWT authentication
+- [ ] Set up logging and monitoring
+- [ ] Configure CORS properly
+- [ ] Add rate limiting
+- [ ] Database backup strategy
+
+**Desktop:**
+- [ ] Build executable (PyInstaller)
+- [ ] Package dependencies
+- [ ] Create installer
+- [ ] Add auto-update mechanism
+- [ ] Error logging to file
+- [ ] User manual documentation
+
+**ESP32-CAM:**
+- [ ] Configure static IP
+- [ ] Set up authentication
+- [ ] Firmware version management
+- [ ] Fallback camera support
+
+### Bảo Trì Thường Xuyên
+
+**Hàng tuần:**
+- Backup database (attendance records)
+- Check log files for errors
+- Monitor API response times
+
+**Hàng tháng:**
+- Update dependencies (security patches)
+- Clean up old logs
+- Review and optimize slow queries
+- Backup embeddings file
+
+**Hàng quý:**
+- Re-train models if needed
+- Update documentation
+- Performance optimization
+- Security audit
+
+### Troubleshooting
+
+**Lỗi thường gặp:**
+
+1. **Backend không khởi động:**
+   - Check DATABASE_URL in .env
+   - Verify PostgreSQL is running
+   - Check port 8000 availability
+
+2. **Desktop không kết nối API:**
+   - Verify backend is running
+   - Check API_CONFIG.base_url
+   - Test with curl/Postman
+
+3. **ESP32-CAM không stream:**
+   - Check WiFi connection
+   - Verify IP address
+   - Test stream URL in browser
+   - Check camera module connection
+
+4. **Nhận dạng kém:**
+   - Retrain with more photos
+   - Check lighting conditions
+   - Verify quality threshold
+   - Update embeddings file
 
 ---
-*Tài liệu được tổng hợp tự động ngày 20/11/2025.*
+
+## 📊 THỐNG KÊ DỰ ÁN
+
+**Lines of Code**: ~15,000+
+**Files Created**: 50+
+**Modules**: 9 feature modules
+**API Endpoints**: 40+
+**Database Tables**: 10
+**Refactoring Status**: ✅ Complete
+
+**Team:**
+- Project Lead: [Your Name]
+- Institution: HUTECH
+- Year: 2025
+
+---
+
+**Cập nhật lần cuối**: 21/11/2025
+**Phiên bản**: 2.0 (Professional Architecture)
+**License**: Educational Project

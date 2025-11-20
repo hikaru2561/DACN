@@ -1,0 +1,233 @@
+﻿Folder PATH listing for volume K9
+Volume serial number is BC60-60F0
+D:\HUTECH\DACN\ATTENDANCE_SYSTEM
++---backend
+|   |   .env
+|   |   .env.example
+|   |   requirements.txt
+|   |   
+|   +---app
+|   |   |   main.py
+|   |   |   __init__.py
+|   |   |   
+|   |   +---api
+|   |   |   |   attendance.py
+|   |   |   |   cameras.py
+|   |   |   |   classes.py
+|   |   |   |   deps.py
+|   |   |   |   reports.py
+|   |   |   |   sessions.py
+|   |   |   |   students.py
+|   |   |   |   subjects.py
+|   |   |   |   teachers.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           attendance.cpython-312.pyc
+|   |   |           cameras.cpython-312.pyc
+|   |   |           classes.cpython-312.pyc
+|   |   |           reports.cpython-312.pyc
+|   |   |           sessions.cpython-312.pyc
+|   |   |           students.cpython-312.pyc
+|   |   |           subjects.cpython-312.pyc
+|   |   |           teachers.cpython-312.pyc
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---core
+|   |   |   |   config.py
+|   |   |   |   database.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           config.cpython-312.pyc
+|   |   |           database.cpython-312.pyc
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---models
+|   |   |   |   attendance.py
+|   |   |   |   base.py
+|   |   |   |   camera.py
+|   |   |   |   class_.py
+|   |   |   |   session.py
+|   |   |   |   student.py
+|   |   |   |   subject.py
+|   |   |   |   teacher.py
+|   |   |   |   user.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           attendance.cpython-312.pyc
+|   |   |           camera.cpython-312.pyc
+|   |   |           class_.cpython-312.pyc
+|   |   |           session.cpython-312.pyc
+|   |   |           student.cpython-312.pyc
+|   |   |           subject.cpython-312.pyc
+|   |   |           teacher.cpython-312.pyc
+|   |   |           user.cpython-312.pyc
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---schemas
+|   |   |   |   attendance.py
+|   |   |   |   camera.py
+|   |   |   |   class_.py
+|   |   |   |   common.py
+|   |   |   |   session.py
+|   |   |   |   stats.py
+|   |   |   |   student.py
+|   |   |   |   subject.py
+|   |   |   |   teacher.py
+|   |   |   |   user.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           attendance.cpython-312.pyc
+|   |   |           camera.cpython-312.pyc
+|   |   |           class_.cpython-312.pyc
+|   |   |           common.cpython-312.pyc
+|   |   |           session.cpython-312.pyc
+|   |   |           stats.cpython-312.pyc
+|   |   |           student.cpython-312.pyc
+|   |   |           subject.cpython-312.pyc
+|   |   |           teacher.cpython-312.pyc
+|   |   |           user.cpython-312.pyc
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---utils
+|   |   |       __init__.py
+|   |   |       
+|   |   \---__pycache__
+|   |           main.cpython-312.pyc
+|   |           __init__.cpython-312.pyc
+|   |           
+|   \---tests
++---database
+|       create_database.py
+|       insert_sample_data.sql
+|       run_sample_data.py
+|       run_schema.py
+|       schema.sql
+|       test_connection.py
+|       
++---desktop
+|   |   requirements.txt
+|   |   
+|   +---app
+|   |   |   main.py
+|   |   |   __init__.py
+|   |   |   
+|   |   +---components
+|   |   |       __init__.py
+|   |   |       
+|   |   +---core
+|   |   |   |   api_client.py
+|   |   |   |   colors.py
+|   |   |   |   config.py
+|   |   |   |   constants.py
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           api_client.cpython-312.pyc
+|   |   |           colors.cpython-312.pyc
+|   |   |           config.cpython-312.pyc
+|   |   |           constants.cpython-312.pyc
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---modules
+|   |   |   |   __init__.py
+|   |   |   |   
+|   |   |   +---attendance
+|   |   |   |   |   history.py
+|   |   |   |   |   live_attendance.py
+|   |   |   |   |   recognition.py
+|   |   |   |   |   session_selection.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           history.cpython-312.pyc
+|   |   |   |           live_attendance.cpython-312.pyc
+|   |   |   |           recognition.cpython-312.pyc
+|   |   |   |           session_selection.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---camera
+|   |   |   |   |   camera_window.py
+|   |   |   |   |   capture.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           camera_window.cpython-312.pyc
+|   |   |   |           capture.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---class_
+|   |   |   |   |   class_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           class_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---report
+|   |   |   |   |   report_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           report_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---session
+|   |   |   |   |   session_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           session_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---student
+|   |   |   |   |   student_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           student_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---subject
+|   |   |   |   |   subject_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           subject_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   +---teacher
+|   |   |   |   |   teacher_window.py
+|   |   |   |   |   __init__.py
+|   |   |   |   |   
+|   |   |   |   \---__pycache__
+|   |   |   |           teacher_window.cpython-312.pyc
+|   |   |   |           __init__.cpython-312.pyc
+|   |   |   |           
+|   |   |   \---__pycache__
+|   |   |           __init__.cpython-312.pyc
+|   |   |           
+|   |   +---ui
+|   |   |   |   dashboard_window.py
+|   |   |   |   login_window.py
+|   |   |   |   
+|   |   |   \---__pycache__
+|   |   |           dashboard_window.cpython-312.pyc
+|   |   |           login_window.cpython-312.pyc
+|   |   |           
+|   |   +---utils
+|   |   |       build_embeddings.py
+|   |   |       __init__.py
+|   |   |       
+|   |   \---__pycache__
+|   |           main.cpython-312.pyc
+|   |           __init__.cpython-312.pyc
+|   |           
+|   +---assets
+|   \---tests
++---logs
++---models
+\---temp
