@@ -697,7 +697,7 @@ class StudentModuleNew:
         
         # Đường dẫn thư mục ảnh sinh viên (dùng config)
         from app.core.config import PATHS
-        student_folder = PATHS["processed_dir"] / student_id
+        student_folder = PATHS["raw_dir"] / student_id
         student_folder = str(student_folder)  # Convert Path to string
         
         if not os.path.exists(student_folder):

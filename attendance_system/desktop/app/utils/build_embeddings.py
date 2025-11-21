@@ -1,6 +1,6 @@
 """
 Build Face Embeddings Database
-Đọc ảnh từ dataset/processed/ → Trích xuất embeddings → Lưu vào face_embeddings.pkl
+Đọc ảnh từ dataset/raw/ → Trích xuất embeddings → Lưu vào face_embeddings.pkl
 """
 import cv2
 import numpy as np
@@ -22,7 +22,7 @@ except ImportError:
 # ============================================================================
 
 DATASET_ROOT = Path(r"d:\HUTECH\DACN\dataset")
-DATASET_PROCESSED = DATASET_ROOT / "processed"
+DATASET_RAW = DATASET_ROOT / "raw"
 EMBEDDINGS_FILE = DATASET_ROOT / "face_embeddings.pkl"
 
 
@@ -31,7 +31,7 @@ EMBEDDINGS_FILE = DATASET_ROOT / "face_embeddings.pkl"
 # ============================================================================
 
 def build_embeddings_database():
-    """Xây dựng embeddings database từ dataset/processed/"""
+    """Xây dựng embeddings database từ dataset/raw/"""
     
     if not INSIGHTFACE_AVAILABLE:
         print("\n❌ InsightFace không khả dụng!")
@@ -41,13 +41,13 @@ def build_embeddings_database():
     print("=" * 80)
     print("  🔧 BUILD FACE EMBEDDINGS DATABASE")
     print("=" * 80)
-    print(f"📂 Dataset: {DATASET_PROCESSED}")
+    print(f"📂 Dataset: {DATASET_RAW}")
     print(f"💾 Output: {EMBEDDINGS_FILE}")
     print("=" * 80)
     
     # Kiểm tra dataset folder
-    if not DATASET_PROCESSED.exists():
-        print(f"\n❌ Dataset folder không tồn tại: {DATASET_PROCESSED}")
+    if not DATASET_RAW.exists():
+        print(f"\n❌ Dataset folder không tồn tại: {DATASET_RAW}")
         return False
     
     # Load InsightFace model
@@ -66,10 +66,10 @@ def build_embeddings_database():
     total_images = 0
     failed_images = 0
     
-    print(f"\n📸 Scanning student folders in {DATASET_PROCESSED}...\n")
+    print(f"\n📸 Scanning student folders in {DATASET_RAW}...\n")
     
     # Duyệt qua từng student folder
-    student_folders = sorted([d for d in DATASET_PROCESSED.iterdir() if d.is_dir()])
+    student_folders = sorted([d for d in DATASET_RAW.iterdir() if d.is_dir()])
     
     if len(student_folders) == 0:
         print("⚠️  Không tìm thấy folder sinh viên nào!")

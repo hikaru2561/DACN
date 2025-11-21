@@ -23,7 +23,7 @@ PATHS = {
     
     # Dataset nằm ở project root
     "dataset_dir": PROJECT_ROOT / "dataset",
-    "processed_dir": PROJECT_ROOT / "dataset" / "processed",
+    "raw_dir": PROJECT_ROOT / "dataset" / "raw",
     
     "models_dir": BASE_DIR / "models",
     "logs_dir": BASE_DIR / "logs",
@@ -120,7 +120,7 @@ CAPTURE_CONFIG = {
     "min_face_size": 100,  # pixels
     
     # Photo storage
-    "dataset_path": str(PATHS["processed_dir"]),
+    "dataset_path": str(PATHS["raw_dir"]),
     "photo_format": "jpg",
     "photo_quality": 95,  # JPEG quality (1-100)
     
@@ -158,8 +158,8 @@ def set_camera_url(url: str):
 def get_dataset_path(student_id: str = None):
     """Lấy đường dẫn thư mục dataset"""
     if student_id:
-        return str(PATHS["processed_dir"] / student_id)
-    return str(PATHS["processed_dir"])
+        return str(PATHS["raw_dir"] / student_id)
+    return str(PATHS["raw_dir"])
 
 def get_embeddings_path():
     """Lấy đường dẫn file embeddings"""

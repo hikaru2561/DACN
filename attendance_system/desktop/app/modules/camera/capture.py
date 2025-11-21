@@ -55,7 +55,7 @@ class CaptureConfig:
     
     # Dataset paths
     DATASET_ROOT = Path(get_dataset_path())
-    DATASET_PROCESSED = DATASET_ROOT
+    DATASET_RAW = DATASET_ROOT
     
     # Capture settings
     TARGET_PHOTOS = CAPTURE_CONFIG["target_photos"]
@@ -580,7 +580,7 @@ class CameraCaptureWindow:
     def start_capture(self):
         """Bắt đầu chụp ảnh"""
         # Tạo thư mục
-        save_dir = CaptureConfig.DATASET_PROCESSED / self.student_id
+        save_dir = CaptureConfig.DATASET_RAW / self.student_id
         save_dir.mkdir(parents=True, exist_ok=True)
         
         # Khởi động stream
@@ -618,7 +618,7 @@ class CameraCaptureWindow:
                 messagebox.showinfo(
                     "Thành công", 
                     f"Đã chụp đủ {CaptureConfig.TARGET_PHOTOS} ảnh!\n\n"
-                    f"Lưu tại: dataset/processed/{self.student_id}/\n\n"
+                    f"Lưu tại: dataset/raw/{self.student_id}/\n\n"
                     "Đang trích xuất embeddings..."
                 )
                 
@@ -766,7 +766,7 @@ class CameraCaptureWindow:
             filename = f"{self.student_id}_{timestamp}_{quality_str}.jpg"
             
             # Lưu FRAME GỐC (toàn bộ ảnh từ camera, không crop)
-            save_dir = CaptureConfig.DATASET_PROCESSED / self.student_id
+            save_dir = CaptureConfig.DATASET_RAW / self.student_id
             save_path = save_dir / filename
             
             if frame is not None:

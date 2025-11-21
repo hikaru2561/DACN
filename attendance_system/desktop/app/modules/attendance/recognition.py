@@ -53,7 +53,7 @@ class AttendanceConfig:
     
     # Dataset paths
     DATASET_ROOT = Path(r"d:\HUTECH\DACN\dataset")
-    DATASET_PROCESSED = DATASET_ROOT / "processed"
+    DATASET_RAW = DATASET_ROOT / "raw"
     EMBEDDINGS_FILE = DATASET_ROOT / "face_embeddings.pkl"
     
     # Recognition settings
@@ -201,7 +201,7 @@ class FaceRecognitionEngine:
         if not INSIGHTFACE_AVAILABLE or self.app is None:
             return {"success": False, "message": "InsightFace không khả dụng"}
         
-        student_dir = AttendanceConfig.DATASET_PROCESSED / student_id
+        student_dir = AttendanceConfig.DATASET_RAW / student_id
         
         if not student_dir.exists():
             return {"success": False, "message": f"Không tìm thấy folder: {student_dir}"}
@@ -260,17 +260,17 @@ class FaceRecognitionEngine:
             return {"success": False, "message": f"Lỗi lưu file: {str(e)}"}
     
     def build_embeddings(self, progress_callback=None):
-        """Xây dựng embeddings database từ dataset/processed/"""
+        """Xây dựng embeddings database từ dataset/raw/"""
         if not INSIGHTFACE_AVAILABLE or self.app is None:
             return {"success": False, "error": "InsightFace app not available"}
         
         self.embeddings_db = {}
-        processed_dir = AttendanceConfig.DATASET_PROCESSED
+        raw_dir = AttendanceConfig.DATASET_RAW
         
-        if not processed_dir.exists():
-            return {"success": False, "error": f"Dataset not found: {processed_dir}"}
+        if not raw_dir.exists():
+            return {"success": False, "error": f"Dataset not found: {raw_dir}"}
         
-        student_folders = [d for d in processed_dir.iterdir() if d.is_dir()]
+        student_folders = [d for d in raw_dir.iterdir() if d.is_dir()]
         total_students = len(student_folders)
         
         if total_students == 0:

@@ -10,7 +10,7 @@ APP_VERSION = "1.0.0"
 # Paths
 APP_ROOT = Path(__file__).parent.parent.parent
 DATASET_ROOT = APP_ROOT.parent.parent / "dataset"
-DATASET_PROCESSED = DATASET_ROOT / "processed"
+DATASET_RAW = DATASET_ROOT / "raw"
 EMBEDDINGS_FILE = DATASET_ROOT / "face_embeddings.pkl"
 
 # API
