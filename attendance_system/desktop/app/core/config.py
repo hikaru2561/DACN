@@ -50,7 +50,7 @@ API_CONFIG = {
 
 CAMERA_CONFIG = {
     # ESP32-CAM Stream URL
-    "stream_url": "http://192.168.1.169/stream",
+    "stream_url": "http://192.168.1.192/stream",
     
     # Backup camera URLs (nếu có nhiều camera)
     "backup_streams": [
