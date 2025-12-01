@@ -50,7 +50,7 @@ class LoginWindow:
         
         title_label = tk.Label(
             header, 
-            text="HỆ THỐNG QUẢN LÝ ĐIỂM DANH",
+            text="HỆ THỐNG KIỂM SOÁT RA VÀO",
             font=("Segoe UI", 16, "bold"),
             fg=COLORS["white"],
             bg=COLORS["primary"]
@@ -59,7 +59,7 @@ class LoginWindow:
         
         subtitle_label = tk.Label(
             header,
-            text="Face Recognition Attendance System",
+            text="Face Recognition Access Control System",
             font=("Segoe UI", 9),
             fg=COLORS["white"],
             bg=COLORS["primary"]

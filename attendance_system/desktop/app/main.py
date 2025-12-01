@@ -17,7 +17,7 @@ if str(desktop_root) not in sys.path:
 
 from app.core.api_client import APIClient
 from app.ui.login_window import LoginWindow
-from app.ui.dashboard_window import MainApplication
+from app.modules.dashboard.dashboard_window import DashboardWindow
 
 def start_app():
     """Khởi động ứng dụng"""
@@ -31,7 +31,7 @@ def start_app():
     def on_login_success(username):
         # Create new root for main app
         main_root = tk.Tk()
-        app = MainApplication(main_root, api, username)
+        app = DashboardWindow(main_root, username)
         main_root.mainloop()
     
     # Show login window

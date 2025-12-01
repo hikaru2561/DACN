@@ -45,6 +45,8 @@ COLORS = {
     "text": "#212121",
     "text_secondary": "#757575",
     "border": "#E0E0E0",
+    "bg_dark": "#1e1e1e",
+    "bg_light": "#f5f5f5",
     
     # Button colors
     "btn_save": "#27AE60",

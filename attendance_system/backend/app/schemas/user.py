@@ -1,32 +1,29 @@
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
 from typing import Optional
-from .common import UserRoleEnum
+from pydantic import BaseModel
+from datetime import datetime
 
+# Shared properties
 class UserBase(BaseModel):
-    username: str
-    email: EmailStr
-    role: UserRoleEnum
+    full_name: str
+    is_active: Optional[bool] = True
 
-
+# Properties to receive via API on creation
 class UserCreate(UserBase):
-    password: str
+    pass
 
+# Properties to receive via API on update
+class UserUpdate(UserBase):
+    full_name: Optional[str] = None
 
-class UserLogin(BaseModel):
-    username: str
-    password: str
+class UserInDBBase(UserBase):
+    id: int
+    avatar_path: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-
-class UserResponse(UserBase):
-    user_id: int
-    is_active: bool
-    created_at: datetime
-    
     class Config:
         from_attributes = True
 
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+# Additional properties to return via API
+class User(UserInDBBase):
+    pass

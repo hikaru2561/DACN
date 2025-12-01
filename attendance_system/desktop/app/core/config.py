@@ -24,6 +24,7 @@ PATHS = {
     # Dataset nằm ở project root
     "dataset_dir": PROJECT_ROOT / "dataset",
     "raw_dir": PROJECT_ROOT / "dataset" / "raw",
+    "history_dir": PROJECT_ROOT / "dataset" / "history",
     
     "models_dir": BASE_DIR / "models",
     "logs_dir": BASE_DIR / "logs",
@@ -50,7 +51,7 @@ API_CONFIG = {
 
 CAMERA_CONFIG = {
     # ESP32-CAM Stream URL
-    "stream_url": "http://192.168.1.192/stream",
+    "stream_url": "http://192.168.1.231/stream",
     
     # Backup camera URLs (nếu có nhiều camera)
     "backup_streams": [
@@ -78,8 +79,8 @@ FACE_RECOGNITION_CONFIG = {
     "model_path": None,  # None = auto download
     
     # Recognition thresholds
-    "similarity_threshold": 0.50,  # Ngưỡng độ tương đồng
-    "confidence_threshold": 0.6,   # Ngưỡng confidence score
+    "similarity_threshold": 0.7,  # Ngưỡng độ tương đồng
+    "confidence_threshold": 0.7,   # Ngưỡng confidence score
     
     # Face detection settings
     "det_size": (640, 640),

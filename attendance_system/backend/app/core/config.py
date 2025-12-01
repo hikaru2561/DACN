@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:Nguyenquang%402561@localhost:5432/attendance_system"
+    DATABASE_URL: str = "postgresql://postgres:Nguyenquang%402561@localhost:5432/access_control_db"
     
     # API
     API_V1_STR: str = "/api"
