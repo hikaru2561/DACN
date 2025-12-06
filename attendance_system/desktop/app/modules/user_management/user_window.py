@@ -7,13 +7,14 @@ from app.core.trainer import ModelTrainer
 import threading
 
 class UserManagementWindow:
-    def __init__(self, parent, stream_reader=None):
+    def __init__(self, parent, stream_reader=None, dashboard=None):
         self.window = tk.Toplevel(parent)
         self.window.title("Quản lý Người dùng")
         self.window.geometry("900x600")
         self.window.configure(bg=COLORS["bg_light"])
         
         self.stream_reader = stream_reader  # Nhận stream từ Dashboard
+        self.dashboard = dashboard  # Tham chiếu để pause/resume stream
         self.api = APIClient()
         self.create_ui()
         self.load_data()
@@ -132,10 +133,14 @@ class UserManagementWindow:
         user_id = item['values'][0]
         user_name = item['values'][1]
         
-        # Stream đã được giữ từ Dashboard, không cần pause/resume
-            
-        # Open capture window - Truyền stream_reader
-        capture_win = CaptureWindow(self.window, str(user_id), user_name, self.stream_reader)
+        # Open capture window - Truyền stream_reader và dashboard
+        capture_win = CaptureWindow(
+            self.window, 
+            str(user_id), 
+            user_name, 
+            self.stream_reader,
+            self.dashboard
+        )
 
     def train_selected_user(self):
         selected = self.tree.selection()

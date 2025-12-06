@@ -9,9 +9,10 @@ import numpy as np
 from pathlib import Path
 from app.core.config import CAMERA_CONFIG, PATHS
 from app.core.colors import COLORS
+from app.core.face_recognizer import FaceRecognizer
 
 class CaptureWindow:
-    def __init__(self, parent, user_code, user_name, stream_reader=None):
+    def __init__(self, parent, user_code, user_name, stream_reader=None, dashboard=None):
         self.window = tk.Toplevel(parent)
         self.window.title(f"Chụp ảnh mẫu - {user_name}")
         self.window.geometry("1200x900")
@@ -27,8 +28,22 @@ class CaptureWindow:
         self.current_frame = None
         self.last_capture_time = 0
         
-        # Sử dụng stream từ Dashboard (không cần pause/resume)
+        # Sử dụng stream từ Dashboard
         self.stream_reader = stream_reader
+        self.dashboard = dashboard
+        
+        # PAUSE dashboard stream
+        if self.dashboard:
+            print("⏸️ CaptureWindow: Pausing dashboard...")
+            self.dashboard.pause_stream()
+        
+        # Load FaceRecognizer để kiểm tra trùng lặp
+        try:
+            self.recognizer = FaceRecognizer()
+            print("✅ Loaded FaceRecognizer for duplicate check")
+        except Exception as e:
+            print(f"⚠️ Could not load FaceRecognizer: {e}")
+            self.recognizer = None
             
         self.create_ui()
         
@@ -103,17 +118,8 @@ class CaptureWindow:
                     
                 self.current_frame = frame
                 
-                # --- BRIGHTNESS ADJUSTMENT ---
-                # Tăng độ sáng nếu ảnh quá tối
-                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                h, s, v = cv2.split(hsv)
-                
-                # Tăng độ sáng (Value channel)
-                v = cv2.add(v, 30)  # Tăng 30 đơn vị
-                v = np.clip(v, 0, 255)
-                
-                hsv = cv2.merge([h, s, v])
-                frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+                # KHÔNG dùng brightness adjustment - giữ nguyên chất lượng Dashboard
+                # Sử dụng frame gốc
                 
                 # --- QUALITY CHECK ---
                 blur_score = 0
@@ -129,7 +135,7 @@ class CaptureWindow:
                 
                 status_color = (0, 255, 0) if blur_score > 100 else (0, 0, 255)
                 
-                # Draw overlay
+                # Draw overlay (đơn giản - không hiển thị blur)
                 display_frame = frame.copy()
                 
                 # Draw face rectangles
@@ -138,14 +144,14 @@ class CaptureWindow:
                     for (x, y, w, h) in faces:
                         cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 
-                cv2.putText(display_frame, f"Blur: {blur_score:.1f} | Faces: {len(faces)}", (20, 40), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
-                cv2.putText(display_frame, f"Photos: {self.photos_taken}/{self.target_photos}", (20, 80),
-                          cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                # Chỉ hiển thị Photos counter
+                cv2.putText(display_frame, f"Photos: {self.photos_taken}/{self.target_photos}", (20, 40),
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 
-                # --- AUTO CAPTURE LOGIC ---
+                # --- AUTO CAPTURE (Bỏ blur check) ---
                 if self.var_auto.get() and self.photos_taken < self.target_photos:
-                    if blur_score > 100 and face_detected:
+                    # Chỉ cần có face là chụp
+                    if face_detected:
                         current_time = time.time()
                         if current_time - self.last_capture_time > 0.5:
                             self.save_photo(frame)
@@ -174,6 +180,35 @@ class CaptureWindow:
     def save_photo(self, frame):
         if self.photos_taken >= self.target_photos:
             return
+        
+        # === KIỂM TRA TRÙNG LẶP (Chỉ check ảnh đầu tiên) ===
+        if self.recognizer is not None and self.photos_taken == 0:
+            try:
+                results = self.recognizer.process_frame(frame)
+                
+                if len(results) > 0:
+                    for res in results:
+                        if res["name"] != "Unknown":
+                            existing_id = str(res.get("id", ""))
+                            existing_name = res["name"]
+                            similarity = res["score"]
+                            
+                            # Nếu face thuộc về user KHÁC
+                            if existing_id != str(self.user_code):
+                                messagebox.showerror(
+                                    "Khuôn mặt đã tồn tại!",
+                                    f"⚠️ Khuôn mặt này đã được đăng ký!\n\n"
+                                    f"👤 Người dùng: {existing_name}\n"
+                                    f"🆔 ID: {existing_id}\n"
+                                    f"📊 Độ tương đồng: {similarity*100:.1f}%\n\n"
+                                    f"Vui lòng sử dụng khuôn mặt khác hoặc xóa user cũ!"
+                                )
+                                self.close()
+                                return
+                            else:
+                                print(f"✅ Face belongs to user {self.user_code} - Continue")
+            except Exception as e:
+                print(f"⚠️ Duplicate check error: {e}")
 
         timestamp = int(time.time() * 1000)
         filename = f"{self.user_code}_{timestamp}.jpg"
@@ -227,6 +262,9 @@ class CaptureWindow:
     def close(self):
         self.is_capturing = False
         
-        # Stream không cần resume vì Dashboard vẫn đang dùng chung
+        # RESUME dashboard
+        if self.dashboard:
+            print("▶️ CaptureWindow: Resuming dashboard...")
+            self.dashboard.resume_stream()
         
         self.window.destroy()

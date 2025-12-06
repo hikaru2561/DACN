@@ -125,6 +125,8 @@ class DashboardWindow:
         # Liveness Detection State
         self.liveness_required = True  # Bật liveness check
         self.liveness_verified = False
+        self.liveness_verified_time = 0  # Thời điểm verify thành công
+        self.liveness_timeout = 10  # Timeout 10s sau khi verify
         self.blink_counter = 0
         self.blink_threshold = 0.21  # EAR threshold
         self.prev_ear = 0.3
@@ -132,6 +134,8 @@ class DashboardWindow:
         
         self.last_open_time = 0
         self.last_esp_update = 0
+        self.recognition_paused_until = 0  # Pause recognition sau access
+        self.last_recognition_name = ""  # Lưu kết quả nhận diện để hiển thị
         
         # Stream Reader
         stream_url = CAMERA_CONFIG.get("stream_url")
@@ -257,6 +261,12 @@ class DashboardWindow:
                 blink_detected = True
                 self.blink_counter += 1
                 print(f"👁️ Blink detected! Count: {self.blink_counter}/{self.blinks_needed}")
+                
+                # Nếu đủ số lần nháy -> Set verified time
+                if self.blink_counter >= self.blinks_needed and not self.liveness_verified:
+                    self.liveness_verified = True
+                    self.liveness_verified_time = time.time()
+                    print(f"✅ Liveness verified! (Will timeout in {self.liveness_timeout}s if no recognition)")
             
             self.prev_ear = ear
             return blink_detected, ear
@@ -308,7 +318,11 @@ class DashboardWindow:
                 # 2. Face Detection (chỉ khi đã verify liveness hoặc không cần)
                 show_recognition = not self.liveness_required or self.liveness_verified
                 
-                if show_recognition:
+                # Kiểm tra xem có đang trong thời gian pause không
+                current_time = time.time()
+                is_in_pause = current_time < self.recognition_paused_until
+                
+                if show_recognition and not is_in_pause:
                     results = self.face_detection.process(frame_rgb)
                     
                     if results.detections:
@@ -345,6 +359,24 @@ class DashboardWindow:
                                 cv2.rectangle(frame_rgb, (x, y), (x + bw, y + bh), color, 2)
                                 cv2.putText(frame_rgb, display_name, (x, y - 10), 
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                
+                # 3. Hiển thị status message trong thời gian pause
+                if is_in_pause and hasattr(self, 'last_recognition_name'):
+                    remaining = self.recognition_paused_until - current_time
+                    if self.last_recognition_name != "Unknown":
+                        # Success message
+                        msg = f"ACCESS GRANTED: {remove_accents(self.last_recognition_name)}"
+                        color = (0, 255, 0)  # Green
+                    else:
+                        # Unknown message
+                        msg = "UNKNOWN - Access Denied"
+                        color = (255, 0, 0)  # Red
+                    
+                    # Hiển thị message lớn ở giữa màn hình
+                    cv2.putText(frame_rgb, msg, (w//2 - 300, h//2), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
+                    cv2.putText(frame_rgb, f"Reset in {int(remaining)+1}s...", (w//2 - 150, h//2 + 60),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
                 # Display
                 try:
@@ -358,43 +390,85 @@ class DashboardWindow:
             time.sleep(0.01)
 
     def recognition_loop(self):
-        """InsightFace Recognition (Background) - Only after liveness verified"""
+        """InsightFace Recognition - Flow: Nháy mắt → Nhận diện → Reset"""
         while self.is_running:
-            # Chỉ nhận diện khi đã verify liveness hoặc không cần liveness
             if hasattr(self, 'current_frame') and self.current_frame is not None and not self.is_paused:
-                # Check liveness requirement
-                can_recognize = not self.liveness_required or self.liveness_verified
-                
-                if can_recognize:
-                    try:
-                        frame_to_process = self.current_frame.copy()
-                        small_frame = cv2.resize(frame_to_process, (0, 0), fx=0.5, fy=0.5)
-                        results = self.recognizer.process_frame(small_frame)
-                        self.recognition_results = results
+                try:
+                    current_time = time.time()
+                    
+                    # === CHECK 1: Recognition đang bị pause (ESP đang xử lý hoặc chờ Unknown) ===
+                    if current_time < self.recognition_paused_until:
+                        remaining = self.recognition_paused_until - current_time
+                        time.sleep(0.3)
+                        continue
+                    
+                    # === STEP 1: Yêu cầu nháy mắt ===
+                    if self.liveness_required and not self.liveness_verified:
+                        # Chưa verify liveness → Chờ người dùng nháy mắt
+                        self.recognition_results = []
+                        time.sleep(0.3)
+                        continue
+                    
+                    # === STEP 2: Đã nháy mắt → Bắt đầu nhận diện ===
+                    frame_to_process = self.current_frame.copy()
+                    small_frame = cv2.resize(frame_to_process, (0, 0), fx=0.5, fy=0.5)
+                    results = self.recognizer.process_frame(small_frame)
+                    self.recognition_results = results
 
-                        # Handle Actions (Door/ESP)
-                        for res in results:
-                            if res["name"] != "Unknown":
-                                current_time = time.time()
+                    # === STEP 3: Xử lý kết quả ===
+                    recognized = False
+                    for res in results:
+                        if res["name"] != "Unknown":
+                            recognized = True
+                            
+                            # Debounce: Tránh trigger nhiều lần
+                            if current_time - self.last_open_time > 10:
+                                print(f"✅ RECOGNIZED: {res['name']} (Score: {res['score']:.2f})")
                                 
-                                if current_time - self.last_open_time > 10:
-                                    self.trigger_access(res, frame_to_process)
-                                    self.last_open_time = current_time
-                                    # Reset liveness sau khi access
-                                    if self.liveness_required:
-                                        self.liveness_verified = False
-                                        self.blink_counter = 0
-                                        print("🔄 Liveness reset after access")
+                                # Lưu kết quả để hiển thị trên stream
+                                self.last_recognition_name = res['name']
                                 
-                                # Không gửi trực tiếp lên ESP nữa để tránh mở khóa sớm
-                                # ESP sẽ nhận lệnh từ /control/open trong trigger_access()
-                    except Exception as e:
-                        print(f"Recognition error: {e}")
-                else:
-                    # Đang chờ liveness verification
-                    self.recognition_results = []
+                                self.trigger_access(res, frame_to_process)
+                                self.last_open_time = current_time
+                                
+                                # PAUSE 5s để đồng bộ với ESP (đóng khóa sau 5s)
+                                self.recognition_paused_until = current_time + 5
+                                print(f"⏸️ Pausing 5s (ESP closing door...)")
+                                
+                                # RESET liveness → Người tiếp theo phải nháy mắt lại
+                                self.liveness_verified = False
+                                self.blink_counter = 0
+                                self.liveness_verified_time = 0
+                                print("🔄 RESET → Yêu cầu nháy mắt cho người tiếp theo\n")
+                            break  # Chỉ xử lý 1 người
+                    
+                    # === STEP 4: Nếu không nhận diện được ai (Unknown) ===
+                    if not recognized and self.liveness_verified:
+                        print("❌ Unknown face detected")
+                        
+                        # Lưu kết quả "Unknown"
+                        self.last_recognition_name = "Unknown"
+                        
+                        # PAUSE 3s rồi reset
+                        self.recognition_paused_until = current_time + 3
+                        print(f"⏸️ Pausing 3s then reset...")
+                        
+                        # RESET liveness → Yêu cầu nháy mắt lại
+                        self.liveness_verified = False
+                        self.blink_counter = 0
+                        self.liveness_verified_time = 0
+                        print("🔄 RESET → Vui lòng nháy mắt lại\n")
+                        
+                except Exception as e:
+                    print(f"❌ Recognition error: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             time.sleep(0.5)
+
+
+
+
 
     def send_to_esp(self, name):
         def _send():
@@ -459,12 +533,9 @@ class DashboardWindow:
                 traceback.print_exc()
                 filepath = ""
 
-            # 2. Call Backend API (Threaded)
+            # 2. Send to ESP & Save Log (Threaded)
             def _api_call():
                 try:
-                    # Open Door via Backend
-                    self.api.post("/control/open", {})
-                    
                     # Send name to ESP (for OLED display)
                     name_no_accent = remove_accents(user_name)
                     stream_url = CAMERA_CONFIG.get("stream_url", "")
@@ -474,7 +545,7 @@ class DashboardWindow:
                         requests.get(esp_url, timeout=3.0)
                         print(f"📤 Sent to ESP: {name_no_accent}")
                     
-                    # Create Log
+                    # Create Log in DB
                     log_data = {
                         "user_id": res.get("id"),
                         "status": "GRANTED",
@@ -486,7 +557,7 @@ class DashboardWindow:
                     print("✅ Log saved to DB")
                     
                 except Exception as e:
-                    print(f"❌ API Error: {e}")
+                    print(f"⚠️ API/ESP Error (non-critical): {e}")
             
             threading.Thread(target=_api_call, daemon=True).start()
             
@@ -501,16 +572,19 @@ class DashboardWindow:
             messagebox.showerror("Lỗi", f"Không thể mở cửa: {str(e)}")
 
     def pause_stream(self):
+        """Pause dashboard video display, but keep stream_reader running for CaptureWindow"""
         self.is_paused = True
-        self.stream_reader.stop()
+        print("⏸️ Dashboard paused (stream_reader still running)")
 
     def resume_stream(self):
-        self.stream_reader.start()
+        """Resume dashboard video display"""
         self.is_paused = False
+        print("▶️ Dashboard resumed")
 
     def open_user_management(self):
-        # KHÔNG pause stream - User Management cần dùng camera để chụp ảnh
-        user_window = UserManagementWindow(self.root, stream_reader=self.stream_reader)
+        # Truyền cả stream_reader VÀ dashboard reference
+        # để CaptureWindow có thể pause/resume stream
+        user_window = UserManagementWindow(self.root, stream_reader=self.stream_reader, dashboard=self)
         user_window.window.protocol("WM_DELETE_WINDOW", lambda: user_window.window.destroy())
 
     def open_history(self):

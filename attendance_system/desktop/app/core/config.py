@@ -51,7 +51,7 @@ API_CONFIG = {
 
 CAMERA_CONFIG = {
     # ESP32-CAM Stream URL
-    "stream_url": "http://192.168.1.231/stream",
+    "stream_url": "http://10.126.174.244/stream",
     
     # Backup camera URLs (nếu có nhiều camera)
     "backup_streams": [
@@ -60,9 +60,9 @@ CAMERA_CONFIG = {
     ],
     
     # Camera settings
-    "resolution": (640, 480),
+    "resolution": (1024, 768),  # XGA Resolution - Khớp với ESP32
     "fps": 30,
-    "buffer_size": 1024,
+    "buffer_size": 2048,  # Tăng buffer cho XGA
     
     # Reconnect settings
     "max_retries": 3,

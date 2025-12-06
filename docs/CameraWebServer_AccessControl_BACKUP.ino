@@ -448,8 +448,8 @@ void setup() {
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.grab_mode = CAMERA_GRAB_LATEST;  // Always get latest frame
   } else {
-    config.frame_size = FRAMESIZE_VGA;      // 640x480 if no PSRAM
-    config.jpeg_quality = 15;
+    config.frame_size = FRAMESIZE_SVGA;      // 640x480 if no PSRAM
+    config.jpeg_quality = 10;
     config.fb_count = 2;
   }
 

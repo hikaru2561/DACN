@@ -49,26 +49,31 @@ bool is_unlocked = false;
 String user_name = "";
 
 void configure_camera_quality(sensor_t *s) {
-  s->set_brightness(s, 1);
-  s->set_contrast(s, 1);
-  s->set_saturation(s, 0);
-  s->set_sharpness(s, 2);
-  s->set_whitebal(s, 1);
-  s->set_awb_gain(s, 1);
-  s->set_wb_mode(s, 0);
-  s->set_exposure_ctrl(s, 1);
-  s->set_aec2(s, 1);
-  s->set_ae_level(s, 0);
-  s->set_aec_value(s, 300);
-  s->set_gain_ctrl(s, 1);
-  s->set_agc_gain(s, 0);
-  s->set_lenc(s, 0);
-  s->set_bpc(s, 1);
-  s->set_wpc(s, 1);
-  s->set_raw_gma(s, 1);
-  s->set_dcw(s, 0);
-  s->set_hmirror(s, 0);
-  s->set_vflip(s, 0);
+  // --- Cân chỉnh ánh sáng & Màu sắc ---
+  s->set_brightness(s, 1);     // Tăng sáng nhẹ (Module này thường hơi tối)
+  s->set_contrast(s, 0);       // Giữ nguyên độ tương phản để giữ chi tiết
+  s->set_saturation(s, 0);     // Màu sắc tự nhiên
+  s->set_special_effect(s, 0); // Không dùng hiệu ứng màu
+  s->set_whitebal(s, 1);       // Bật cân bằng trắng (White Balance)
+  s->set_awb_gain(s, 1);       // Bật Auto White Balance Gain (Rất quan trọng cho HDF3MP)
+  s->set_wb_mode(s, 0);        // Chế độ Auto (0) hoạt động tốt nhất ngoài trời/trong nhà
+
+  // --- Phơi sáng (Exposure) ---
+  s->set_exposure_ctrl(s, 1);  // Bật kiểm soát phơi sáng
+  s->set_aec2(s, 1);           // Bật DSP làm việc
+  s->set_ae_level(s, 0);       // Mức bù phơi sáng (0 là mặc định)
+  s->set_aec_value(s, 300);    // Giới hạn AEC (có thể tăng lên 400-600 nếu phòng tối)
+  s->set_gain_ctrl(s, 1);      // Bật Gain Control (ISO)
+  
+  // --- Xử lý ảnh & Khắc phục lỗi quang học (QUAN TRỌNG CHO HDF3MP) ---
+  s->set_lenc(s, 1);           // BẬT Lens Correction: BẮT BUỘC cho ống kính góc rộng để khử tối góc
+  s->set_bpc(s, 0);            // Tắt Black Pixel Correction (để giảm noise giả)
+  s->set_wpc(s, 1);            // Bật White Pixel Correction: Khử điểm chết sáng (hot pixels)
+  s->set_raw_gma(s, 1);        // Bật Gamma Correction: Giúp ảnh có chiều sâu hơn
+  
+  // --- Độ nét & Ổn định độ phân giải ---
+  s->set_sharpness(s, 1);      // Độ nét: 1 là vừa đủ, cao quá sẽ bị nhiễu hạt (grainy)
+  s->set_dcw(s, 1);            // BẬT Downsize Crop Window: Giúp sensor scale về XGA chính xác hơn
 }
 
 static esp_err_t stream_handler(httpd_req_t *req) {
@@ -207,18 +212,19 @@ void setup() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;
+    config.frame_size = FRAMESIZE_XGA;  // 1024x768 - XGA Resolution
+    config.jpeg_quality = 14;            // Chất lượng cao hơn (số nhỏ = chất lượng cao)
     config.fb_count = 2;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    Serial.println("✓ PSRAM found");
+    Serial.println("✓ PSRAM found - XGA Mode");
   } else {
-    config.frame_size = FRAMESIZE_VGA;
+    config.frame_size = FRAMESIZE_SVGA;  // 1024x768 - Vẫn dùng XGA
     config.jpeg_quality = 12;
     config.fb_count = 1;
-    Serial.println("⚠ No PSRAM");
+    Serial.println("⚠ No PSRAM - XGA Mode (Limited)");
   }
   
+  // Khởi tạo Camera
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("❌ Camera FAIL: 0x%x\n", err);
@@ -226,8 +232,17 @@ void setup() {
   }
   Serial.println("✓ Camera OK");
   
+  // Lấy con trỏ điều khiển sensor
   sensor_t *s = esp_camera_sensor_get();
+  
+  // --- BẮT BUỘC: Ép lại độ phân giải tại đây ---
+  s->set_framesize(s, FRAMESIZE_XGA); 
+  // ---------------------------------------------
+  
+  // Gọi hàm cấu hình chất lượng mới
   configure_camera_quality(s);
+  
+  // Đợi sensor ổn định cài đặt mới
   delay(200);
 
   Wire.begin(OLED_SDA, OLED_SCL);
