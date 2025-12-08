@@ -136,6 +136,7 @@ class DashboardWindow:
         self.last_esp_update = 0
         self.recognition_paused_until = 0  # Pause recognition sau access
         self.last_recognition_name = ""  # Lưu kết quả nhận diện để hiển thị
+        self.saved_recognition_results = []  # Lưu TẤT CẢ kết quả để vẽ trong pause
         
         # Stream Reader
         stream_url = CAMERA_CONFIG.get("stream_url")
@@ -291,8 +292,13 @@ class DashboardWindow:
                 h, w, _ = frame.shape
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
+                # Kiểm tra xem có đang trong thời gian pause không
+                current_time = time.time()
+                is_in_pause = current_time < self.recognition_paused_until
+                
                 # 1. Liveness Detection (Face Mesh for blink detection)
-                if self.liveness_required and not self.liveness_verified:
+                # KHÔNG hiển thị prompt nháy mắt khi đang pause (đang hiển thị result)
+                if self.liveness_required and not self.liveness_verified and not is_in_pause:
                     mesh_results = self.face_mesh.process(frame_rgb)
                     
                     if mesh_results.multi_face_landmarks:
@@ -317,10 +323,6 @@ class DashboardWindow:
                 
                 # 2. Face Detection (chỉ khi đã verify liveness hoặc không cần)
                 show_recognition = not self.liveness_required or self.liveness_verified
-                
-                # Kiểm tra xem có đang trong thời gian pause không
-                current_time = time.time()
-                is_in_pause = current_time < self.recognition_paused_until
                 
                 if show_recognition and not is_in_pause:
                     results = self.face_detection.process(frame_rgb)
@@ -360,23 +362,73 @@ class DashboardWindow:
                                 cv2.putText(frame_rgb, display_name, (x, y - 10), 
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
                 
-                # 3. Hiển thị status message trong thời gian pause
-                if is_in_pause and hasattr(self, 'last_recognition_name'):
+                # 3. Hiển thị BBOX BÁM THEO FACE trong pause time
+                if is_in_pause and len(self.saved_recognition_results) > 0:
                     remaining = self.recognition_paused_until - current_time
-                    if self.last_recognition_name != "Unknown":
-                        # Success message
-                        msg = f"ACCESS GRANTED: {remove_accents(self.last_recognition_name)}"
-                        color = (0, 255, 0)  # Green
-                    else:
-                        # Unknown message
-                        msg = "UNKNOWN - Access Denied"
-                        color = (255, 0, 0)  # Red
                     
-                    # Hiển thị message lớn ở giữa màn hình
-                    cv2.putText(frame_rgb, msg, (w//2 - 300, h//2), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
-                    cv2.putText(frame_rgb, f"Reset in {int(remaining)+1}s...", (w//2 - 150, h//2 + 60),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                    # DETECT FACE REAL-TIME để update bbox position
+                    current_detections = self.face_detection.process(frame_rgb)
+                    
+                    if current_detections.detections:
+                        # Match detection hiện tại với recognition results
+                        for detection in current_detections.detections:
+                            bboxC = detection.location_data.relative_bounding_box
+                            x = int(bboxC.xmin * w)
+                            y = int(bboxC.ymin * h)
+                            bw = int(bboxC.width * w)
+                            bh = int(bboxC.height * h)
+                            
+                            cx, cy = x + bw//2, y + bh//2
+                            
+                            # Tìm recognition result gần nhất
+                            best_match_name = None
+                            best_match_dist = float('inf')
+                            best_match_score = 0.0  # Khởi tạo score
+                            
+                            for res in self.saved_recognition_results:
+                                old_bbox = res.get("bbox", [])
+                                if len(old_bbox) == 4:
+                                    # Old bbox center (scale x2)
+                                    ox1, oy1, ox2, oy2 = [int(c * 2) for c in old_bbox]
+                                    ocx, ocy = (ox1 + ox2)//2, (oy1 + oy2)//2
+                                    
+                                    # Distance giữa vị trí cũ và mới
+                                    dist = ((cx - ocx)**2 + (cy - ocy)**2)**0.5
+                                    
+                                    # Nếu gần nhau (<200px) → Same person
+                                    if dist < 200 and dist < best_match_dist:
+                                        best_match_dist = dist
+                                        best_match_name = res.get("name", "Unknown")
+                                        best_match_score = res.get("score", 0.0)  # Lấy score
+                            
+                            # Vẽ bbox ở VỊ TRÍ MỚI
+                            if best_match_name:
+                                if best_match_name != "Unknown":
+                                    bbox_color = (0, 255, 0)
+                                    # Hiển thị tên + score
+                                    label = f"{remove_accents(best_match_name)} {int(best_match_score*100)}%"
+                                else:
+                                    bbox_color = (255, 0, 0)
+                                    label = "UNKNOWN"
+                                
+                                # Vẽ bbox ở vị trí HIỆN TẠI (không phải vị trí cũ)
+                                cv2.rectangle(frame_rgb, (x, y), (x + bw, y + bh), bbox_color, 3)
+                                cv2.putText(frame_rgb, label, (x, y - 10), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.9, bbox_color, 2)
+                    
+                    # Hiển thị message chính
+                    if hasattr(self, 'last_recognition_name'):
+                        if self.last_recognition_name != "Unknown":
+                            msg = f"ACCESS GRANTED: {remove_accents(self.last_recognition_name)}"
+                            msg_color = (0, 255, 0)
+                        else:
+                            msg = "UNKNOWN - Access Denied"
+                            msg_color = (255, 0, 0)
+                        
+                        cv2.putText(frame_rgb, msg, (w//2 - 300, h//2), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.2, msg_color, 3)
+                        cv2.putText(frame_rgb, f"Reset in {int(remaining)+1}s...", (w//2 - 150, h//2 + 60),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
                 # Display
                 try:
@@ -425,15 +477,16 @@ class DashboardWindow:
                             if current_time - self.last_open_time > 10:
                                 print(f"✅ RECOGNIZED: {res['name']} (Score: {res['score']:.2f})")
                                 
-                                # Lưu kết quả để hiển thị trên stream
+                                # Lưu TẤT CẢ kết quả để hiển thị
                                 self.last_recognition_name = res['name']
+                                self.saved_recognition_results = results  # Lưu tất cả
                                 
                                 self.trigger_access(res, frame_to_process)
                                 self.last_open_time = current_time
                                 
-                                # PAUSE 5s để đồng bộ với ESP (đóng khóa sau 5s)
-                                self.recognition_paused_until = current_time + 5
-                                print(f"⏸️ Pausing 5s (ESP closing door...)")
+                                # PAUSE 6s để đồng bộ với ESP (đóng khóa sau 5s + 1s buffer)
+                                self.recognition_paused_until = current_time + 6
+                                print(f"⏸️ Pausing 6s (ESP closing door + buffer)...")
                                 
                                 # RESET liveness → Người tiếp theo phải nháy mắt lại
                                 self.liveness_verified = False
@@ -446,8 +499,9 @@ class DashboardWindow:
                     if not recognized and self.liveness_verified:
                         print("❌ Unknown face detected")
                         
-                        # Lưu kết quả "Unknown"
+                        # Lưu kết quả "Unknown" + TẤT CẢ faces
                         self.last_recognition_name = "Unknown"
+                        self.saved_recognition_results = results  # Lưu tất cả
                         
                         # PAUSE 3s rồi reset
                         self.recognition_paused_until = current_time + 3
@@ -565,10 +619,74 @@ class DashboardWindow:
             print(f"❌ trigger_access error: {e}")
 
     def manual_open_door(self):
+        """Mở cửa thủ công bởi Admin"""
         try:
-            response = self.api.post("/control/open", {})
-            messagebox.showinfo("Thành công", "Đã gửi lệnh mở cửa!")
+            # 1. Lấy current frame từ stream
+            if not hasattr(self, 'current_frame') or self.current_frame is None:
+                messagebox.showwarning("Cảnh báo", "Không có hình ảnh từ camera!")
+                return
+            
+            frame = self.current_frame.copy()
+            current_time = time.time()
+            
+            # 2. Lưu snapshot (giống trigger_access)
+            filepath = ""
+            try:
+                # Hardcode path giống trigger_access
+                history_dir = r"D:\HUTECH\DACN\dataset\history"
+                if not os.path.exists(history_dir):
+                    os.makedirs(history_dir, exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"MANUAL_{timestamp}_admin.jpg"
+                filepath = os.path.join(history_dir, filename)
+                
+                cv2.imwrite(filepath, frame)
+                print(f"📸 Manual snapshot saved: {filepath}")
+            except Exception as e:
+                print(f"⚠️ Could not save snapshot: {e}")
+                filepath = ""
+            
+            # 3. Gửi lệnh đến ESP32 (background thread)
+            def _send_esp_and_log():
+                try:
+                    # Gửi lệnh mở cửa đến ESP (port 81) - giống send_to_esp
+                    stream_url = CAMERA_CONFIG.get("stream_url", "")
+                    if stream_url and "http" in stream_url:
+                        ip = stream_url.split("//")[1].split("/")[0].split(":")[0]  # Extract IP only
+                        esp_url = f"http://{ip}:81/control?var=face&val=ADMIN"  # Giống send_to_esp
+                        requests.get(esp_url, timeout=3.0)
+                        print(f"📤 Sent to ESP: ADMIN ({esp_url})")
+                    
+                    # Lưu log vào database
+                    log_data = {
+                        "user_id": None,  # Không có user_id (admin mở)
+                        "status": "MANUAL",  # Status đặc biệt
+                        "similarity_score": 1.0,  # Confidence = 1.0 (thủ công)
+                        "snapshot_path": filepath if filepath else None,  # Giống trigger_access
+                        "note": "Manual open by Admin"  # Ghi chú
+                    }
+                    
+                    self.api.post("/access-logs", log_data)
+                    print("✅ Manual access log saved to DB")
+                    
+                except Exception as e:
+                    print(f"⚠️ ESP/Log error (non-critical): {e}")
+            
+            threading.Thread(target=_send_esp_and_log, daemon=True).start()
+            
+            # 4. Thông báo thành công
+            messagebox.showinfo(
+                "Thành công", 
+                f"✅ Đã mở cửa thủ công!\n\n"
+                f"🕒 Thời gian: {time.strftime('%H:%M:%S', time.localtime(current_time))}\n"
+                f"📸 Ảnh đã lưu: {filename}"
+            )
+            
         except Exception as e:
+            print(f"❌ Manual open error: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Lỗi", f"Không thể mở cửa: {str(e)}")
 
     def pause_stream(self):

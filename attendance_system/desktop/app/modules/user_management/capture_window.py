@@ -10,6 +10,7 @@ from pathlib import Path
 from app.core.config import CAMERA_CONFIG, PATHS
 from app.core.colors import COLORS
 from app.core.face_recognizer import FaceRecognizer
+from insightface.app import FaceAnalysis
 
 class CaptureWindow:
     def __init__(self, parent, user_code, user_name, stream_reader=None, dashboard=None):
@@ -44,6 +45,15 @@ class CaptureWindow:
         except Exception as e:
             print(f"⚠️ Could not load FaceRecognizer: {e}")
             self.recognizer = None
+        
+        # Init InsightFace cho face detection (chính xác hơn Haar Cascade)
+        try:
+            self.face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+            self.face_app.prepare(ctx_id=0, det_size=(640, 640))
+            print("✅ Loaded InsightFace for face detection")
+        except Exception as e:
+            print(f"⚠️ Could not load InsightFace: {e}")
+            self.face_app = None
             
         self.create_ui()
         
@@ -64,11 +74,6 @@ class CaptureWindow:
         
         # Create image item once
         self.canvas_image_id = self.video_canvas.create_image(512, 384, anchor=tk.CENTER)
-        
-        # Info Overlay (Quality Scores)
-        self.lbl_quality = tk.Label(self.window, text="Quality: N/A", font=("Segoe UI", 12, "bold"), 
-                                    bg="black", fg="white")
-        self.lbl_quality.place(x=30, y=30)
 
         # Control Panel
         control_panel = tk.Frame(self.window, bg=COLORS["bg_light"], height=120)
@@ -88,7 +93,7 @@ class CaptureWindow:
         btn_frame = tk.Frame(control_panel, bg=COLORS["bg_light"])
         btn_frame.pack(pady=10)
         
-        self.var_auto = tk.BooleanVar(value=True)
+        self.var_auto = tk.BooleanVar(value=False)  # Mặc định TẮT
         tk.Checkbutton(btn_frame, text="Tự động chụp (Auto)", variable=self.var_auto, 
                        bg=COLORS["bg_light"], font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=20)
         
@@ -121,51 +126,76 @@ class CaptureWindow:
                 # KHÔNG dùng brightness adjustment - giữ nguyên chất lượng Dashboard
                 # Sử dụng frame gốc
                 
-                # --- QUALITY CHECK ---
-                blur_score = 0
+                # --- QUALITY CHECK với InsightFace ---
+                display_frame = frame.copy()  # Tạo frame để vẽ
                 face_detected = False
+                confidence = 0.0
                 
-                # 1. Blur Check (Laplacian)
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+                if self.face_app is not None:
+                    # InsightFace detection (chính xác 99%)
+                    faces = self.face_app.get(frame)
+                    
+                    if len(faces) > 0:
+                        face_detected = True
+                        # Lấy face lớn nhất
+                        largest_face = max(faces, key=lambda x: (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))
+                        confidence = largest_face.det_score  # Detection confidence
+                        
+                        # Vẽ bbox xung quanh face
+                        bbox = largest_face.bbox.astype(int)
+                        cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
+                        
+                        # Hiển thị confidence
+                        conf_text = f"Conf: {confidence:.2f}"
+                        cv2.putText(display_frame, conf_text, (bbox[0], bbox[1] - 10), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                else:
+                    # Fallback: Haar Cascade nếu InsightFace fail
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                    faces_haar = face_cascade.detectMultiScale(gray, 1.1, 4)
+                    face_detected = len(faces_haar) > 0
+                    
+                    if face_detected:
+                        for (x, y, w, h) in faces_haar:
+                            cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 
-                # 2. Simple Face Detection using Haar Cascade (fast)
-                face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-                faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+                # Hiển thị Photos counter và status
+                status_text = f"Photos: {self.photos_taken}/{self.target_photos}"
+                if face_detected:
+                    status_text += f" | Face OK "
+                else:
+                    status_text += f" | No Face "
+                    
+                cv2.putText(display_frame, status_text, (20, 40),
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0) if face_detected else (0, 0, 255), 2)
                 
-                status_color = (0, 255, 0) if blur_score > 100 else (0, 0, 255)
-                
-                # Draw overlay (đơn giản - không hiển thị blur)
-                display_frame = frame.copy()
-                
-                # Draw face rectangles
-                if len(faces) > 0:
-                    face_detected = True
-                    for (x, y, w, h) in faces:
-                        cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                
-                # Chỉ hiển thị Photos counter
-                cv2.putText(display_frame, f"Photos: {self.photos_taken}/{self.target_photos}", (20, 40),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                
-                # --- AUTO CAPTURE (Bỏ blur check) ---
+                # --- AUTO CAPTURE với InsightFace verification ---
                 if self.var_auto.get() and self.photos_taken < self.target_photos:
-                    # Chỉ cần có face là chụp
                     if face_detected:
                         current_time = time.time()
                         if current_time - self.last_capture_time > 0.5:
                             self.save_photo(frame)
                             self.last_capture_time = current_time
+                            print(f"📸 Captured {self.photos_taken}/{self.target_photos} (Conf: {confidence:.2f})")
+                    else:
+                        # Log skip (không chụp vì không có face)
+                        pass  # Không spam log
                 
                 # Convert and display
                 frame_rgb = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame_rgb)
                 photo = ImageTk.PhotoImage(image=img)
                 
-                # Update Canvas
-                self.video_canvas.itemconfig(self.canvas_image_id, image=photo)
-                self.video_canvas.image = photo
-                
+                # Check window còn tồn tại trước khi update
+                try:
+                    if self.window.winfo_exists():
+                        self.video_canvas.itemconfig(self.canvas_image_id, image=photo)
+                        self.video_canvas.image = photo
+                except tk.TclError:
+                    # Window đã bị đóng
+                    break
+                    
             except Exception as e:
                 print(f"❌ CaptureWindow video_loop error: {e}")
                 import traceback
@@ -236,6 +266,11 @@ class CaptureWindow:
                 trainer = ModelTrainer()
                 # Use train_user for incremental update
                 success, msg = trainer.train_user(self.user_code)
+                
+                # QUAN TRỌNG: Reload dashboard recognizer (giống manual train)
+                if success and self.dashboard and hasattr(self.dashboard, 'recognizer'):
+                    self.dashboard.recognizer.load_database()
+                    print("✅ Dashboard recognizer reloaded!")
                 
                 # Update UI in main thread
                 self.window.after(0, lambda: self.on_train_complete(success, msg))

@@ -1,0 +1,863 @@
+# HƯỚNG DẪN TRÍCH XUẤT ĐẶC TRƯNG (EMBEDDING EXTRACTION)
+# Hệ thống Nhận diện Khuôn mặt - Face Recognition Training
+# Version: 3.0 | Date: 2025-12-07
+
+================================================================================
+MỤC LỤC
+================================================================================
+
+1. TỔNG QUAN
+2. QUY TRÌNH TRÍCH XUẤT (STEP-BY-STEP)
+3. EMBEDDING VECTOR - KHÁI NIỆM
+4. MEAN EMBEDDING - TẠI SAO DÙNG?
+5. 2 CHẾ ĐỘ TRAIN
+6. OUTPUT FILES
+7. PERFORMANCE & QUALITY
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+TRÍCH XUẤT ĐẶC TRƯNG LÀ GÌ?
+───────────────────────────
+  • Quá trình biến đổi ảnh khuôn mặt → Vector số (512 chiều)
+  • Mỗi khuôn mặt → 1 vector duy nhất (giống "vân tay số")
+  • Vector này gọi là EMBEDDING
+
+MỤC ĐÍCH:
+─────────
+  ✅ So sánh 2 khuôn mặt = So sánh 2 vectors
+  ✅ Nhanh hơn so sánh trực tiếp ảnh
+  ✅ Chuẩn hóa: Tất cả face → cùng format (512-D)
+
+VÍ DỤ TRỰC QUAN:
+────────────────
+  Ảnh khuôn mặt (1024×768 pixels)
+         ↓
+  [AI Model: InsightFace]
+         ↓
+  Embedding Vector (512 số thực)
+  [0.123, -0.456, 0.789, ..., 0.234]
+         ↓
+  Lưu vào database
+  
+  Khi nhận diện:
+  Face mới → Extract embedding → So sánh với database
+
+CÔNG NGHỆ:
+──────────
+  • Model: InsightFace (buffalo_l)
+  • Algorithm: ArcFace
+  • Output: 512-dimensional vector
+  • Accuracy: 99.8% trên LFW benchmark
+
+KHI NÀO TRAIN?
+──────────────
+  1. Sau khi chụp xong 20 ảnh (tự động)
+  2. Click nút "🧠 Trích xuất một người" (manual)
+  3. Click nút "🔄 Trích xuất tất cả" (full retrain)
+
+================================================================================
+2. QUY TRÌNH TRÍCH XUẤT (STEP-BY-STEP)
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 1: ĐẦU VÀO (INPUT)                                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+NGUỒN DỮ LIỆU:
+  📂 D:\HUTECH\DACN\dataset\raw\{user_code}\
+      ├─ 1_1765088100001.jpg
+      ├─ 1_1765088100501.jpg
+      ├─ ...
+      └─ 1_1765088110001.jpg  (20 files total)
+
+THÔNG SỐ TỪNG ẢNH:
+  • Format: JPG/PNG
+  • Resolution: 1024×768 pixels (XGA)
+  • Size: ~250 KB/ảnh
+  • Content: Khuôn mặt từ camera ESP32
+
+YÊU CẦU:
+  ✅ Mỗi ảnh PHẢI CÓ ít nhất 1 face
+  ✅ Ảnh rõ nét (không quá mờ)
+  ✅ Face đủ lớn trong khung (không quá xa)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 2: LOAD AI MODEL                                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+CODE:
+  from insightface.app import FaceAnalysis
+  
+  app = FaceAnalysis(
+      name='buffalo_l',              # Model name
+      providers=['CPUExecutionProvider']  # CPU mode
+  )
+  app.prepare(ctx_id=0, det_size=(640, 640))
+
+GIẢI THÍCH:
+  • buffalo_l: Tên model (Large version)
+  • CPUExecutionProvider: Chạy trên CPU (không cần GPU)
+  • det_size=(640, 640): Kích thước ảnh khi detect face
+
+THỜI GIAN LOAD:
+  • Lần đầu: ~2-3 giây
+  • Các lần sau: Reuse instance (0ms)
+
+DUNG LƯỢNG:
+  • Model files: ~200 MB (disk)
+  • RAM usage: ~300 MB
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 3: EXTRACT EMBEDDINGS (VÒNG LẶP)                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+QUY TRÌNH CHO MỖI ẢNH:
+  
+  FOR EACH image_file IN user_folder:
+      
+      ┌──────────────────────────────────────────┐
+      │ 3.1. ĐỌC ẢNH                              │
+      └──────────────────────────────────────────┘
+      img = cv2.imread(image_path)
+      → Array shape: (768, 1024, 3)
+      → BGR color format
+      
+      ┌──────────────────────────────────────────┐
+      │ 3.2. DETECT FACE                          │
+      └──────────────────────────────────────────┘
+      faces = app.get(img)
+      
+      RESULT:
+        faces = [
+            {
+                'bbox': [x1, y1, x2, y2],   # Tọa độ face
+                'det_score': 0.98,          # Confidence
+                'kps': [[x,y], ...],        # 5 landmarks
+                'embedding': [512-D array]  # ← QUAN TRỌNG!
+            }
+        ]
+      
+      IF len(faces) == 0:
+          ⚠️ SKIP ảnh này (không có face)
+          LOG: "No face detected in {filename}"
+          continue
+      
+      IF len(faces) > 1:
+          ℹ️ Chọn face LỚN NHẤT
+          face = max(faces, key=lambda x: bbox_area)
+      
+      ┌──────────────────────────────────────────┐
+      │ 3.3. LẤY EMBEDDING                        │
+      └──────────────────────────────────────────┘
+      embedding = face.embedding
+      
+      EMBEDDING LÀ GÌ?
+        • NumPy array: shape (512,)
+        • Kiểu dữ liệu: float32
+        • Giá trị: Số thực từ -∞ đến +∞
+        
+      VÍ DỤ:
+        embedding = array([
+            0.12345,   # Dimension 1
+            -0.98765,  # Dimension 2
+            0.45678,   # Dimension 3
+            ...
+            0.23456    # Dimension 512
+        ], dtype=float32)
+      
+      Ý NGHĨA:
+        → 512 đặc điểm khuôn mặt được encode
+        → Ví dụ:
+          - Dim 1-50: Hình dạng mặt
+          - Dim 51-100: Mắt
+          - Dim 101-150: Mũi
+          - Dim 151-200: Miệng
+          - ... (AI tự học, không định nghĩa cụ thể)
+      
+      ┌──────────────────────────────────────────┐
+      │ 3.4. LƯU VÀO LIST                         │
+      └──────────────────────────────────────────┘
+      user_embeddings.append(embedding)
+      
+      LOG: "✓ Extracted from {filename}"
+
+KẾT QUẢ SAU VÒNG LẶP:
+  user_embeddings = [
+      emb_1,   # Từ ảnh 1
+      emb_2,   # Từ ảnh 2
+      ...
+      emb_20   # Từ ảnh 20
+  ]
+  
+  Shape: (20, 512)
+  → 20 ảnh, mỗi ảnh 1 vector 512 chiều
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 4: TÍNH MEAN EMBEDDING (TRUNG BÌNH CỘNG)                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+TẠI SAO CẦN MEAN?
+─────────────────
+  ❌ KHÔNG dùng mean:
+     → 1 user = 20 embeddings
+     → Database lớn (20x)
+     → Nhận diện chậm (phải so sánh 20 lần)
+  
+  ✅ DÙNG mean:
+     → 1 user = 1 embedding (đại diện)
+     → Database nhỏ gọn
+     → Nhận diện nhanh (chỉ 1 lần so sánh)
+
+CÔNG THỨC:
+──────────
+  mean_embedding = np.mean(user_embeddings, axis=0)
+  
+  CHI TIẾT:
+    user_embeddings shape: (20, 512)
+    axis=0: Trung bình theo HÀNG
+    
+    Result:
+      mean_embedding shape: (512,)
+    
+    Công thức cho từng dimension i:
+      mean[i] = (emb_1[i] + emb_2[i] + ... + emb_20[i]) / 20
+
+VÍ DỤ CỤ THỂ:
+──────────────
+  Dimension 0:
+    Ảnh 1: 0.5
+    Ảnh 2: 0.6
+    Ảnh 3: 0.4
+    ...
+    Ảnh 20: 0.55
+    
+    Mean[0] = (0.5 + 0.6 + 0.4 + ... + 0.55) / 20 = 0.52
+  
+  → Làm cho 512 dimensions
+  
+  Kết quả:
+    mean_embedding = [0.52, -0.31, ..., 0.78]
+
+Ý NGHĨA:
+────────
+  • Mean embedding = "khuôn mặt trung bình" của user
+  • Bao quát tất cả góc độ, biểu cảm
+  • Giảm noise từ ảnh xấu
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 5: NORMALIZATION (CHUẨN HÓA)                                  │
+└─────────────────────────────────────────────────────────────────────┘
+
+CODE:
+  mean_embedding = mean_embedding / np.linalg.norm(mean_embedding)
+
+GIẢI THÍCH:
+───────────
+  np.linalg.norm(x) = Độ dài vector (L2 norm)
+  
+  Công thức:
+    ||x|| = sqrt(x[0]² + x[1]² + ... + x[511]²)
+  
+  Normalization:
+    x_normalized = x / ||x||
+  
+  Kết quả:
+    ||x_normalized|| = 1 (unit vector)
+
+TẠI SAO CẦN?
+────────────
+  1. ĐỂ SỬ DỤNG COSINE SIMILARITY:
+     
+     cosine_sim(A, B) = (A · B) / (||A|| × ||B||)
+     
+     Nếu ||A|| = ||B|| = 1:
+       → cosine_sim(A, B) = A · B (đơn giản hơn)
+  
+  2. ĐỂ BẤT BIẾN VỚI SCALE:
+     
+     Vector [1, 2, 3] và [2, 4, 6] có CÙNG HƯỚNG
+     → Sau normalize → GIỐNG NHAU
+     → So sánh dựa trên HƯỚNG, không phải độ lớn
+
+VÍ DỤ:
+──────
+  Before normalization:
+    mean_emb = [3.0, 4.0, 0.0, ..., 0.0]
+    ||mean_emb|| = sqrt(3² + 4²) = 5.0
+  
+  After normalization:
+    mean_emb = [3/5, 4/5, 0, ..., 0]
+             = [0.6, 0.8, 0, ..., 0]
+    ||mean_emb|| = 1.0 ✓
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 6: UPDATE DATABASE                                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+LOAD EXISTING DATABASE:
+───────────────────────
+  save_path = "dataset/face_embeddings.pkl"
+  
+  IF file exists:
+      with open(save_path, 'rb') as f:
+          data = pickle.load(f)
+      
+      embeddings = data["embeddings"]  # List of vectors
+      names = data["names"]            # List of user_codes
+  ELSE:
+      embeddings = []
+      names = []
+
+KIỂM TRA USER ĐÃ TỒN TẠI:
+─────────────────────────
+  IF user_code IN names:
+      # User cũ → UPDATE
+      idx = names.index(user_code)
+      
+      LOG: "🔄 Updating existing user: {user_code}"
+      
+      # Xóa embedding cũ
+      del names[idx]
+      del embeddings[idx]
+  ELSE:
+      # User mới → ADD
+      LOG: "✨ Creating new user: {user_code}"
+
+THÊM EMBEDDING MỚI:
+───────────────────
+  embeddings.append(mean_embedding)
+  names.append(user_code)
+  
+  RESULT:
+    names = ["1", "2", "3", ..., "10"]
+    embeddings = [emb_1, emb_2, emb_3, ..., emb_10]
+    
+    Length: 10 users
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 7: SAVE TO FILE                                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+FORMAT:
+───────
+  data = {
+      "names": names,
+      "embeddings": embeddings
+  }
+  
+  with open(save_path, 'wb') as f:
+      pickle.dump(data, f)
+
+FILE INFO:
+──────────
+  Path: D:\HUTECH\DACN\dataset\face_embeddings.pkl
+  Format: Python Pickle (binary)
+  Size: ~50 KB/user (512 floats × 4 bytes = 2KB + overhead)
+        → 10 users ≈ 500 KB
+        → 100 users ≈ 5 MB
+
+NỘI DUNG FILE:
+──────────────
+  {
+      "names": [
+          "1",        # User code 1
+          "2",        # User code 2
+          "3",        # User code 3
+          ...
+      ],
+      "embeddings": [
+          array([0.123, -0.456, ...], dtype=float32),  # User 1
+          array([0.789, 0.234, ...], dtype=float32),   # User 2
+          array([-0.567, 0.890, ...], dtype=float32),  # User 3
+          ...
+      ]
+  }
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STEP 8: RELOAD RECOGNIZER                                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+CODE:
+  dashboard.recognizer.load_database()
+
+QUY TRÌNH:
+──────────
+  1. Recognizer đọc lại file embeddings.pkl
+  2. Load vào RAM:
+     self.embeddings = data["embeddings"]
+     self.names = data["names"]
+  3. Sẵn sàng nhận diện
+
+QUAN TRỌNG:
+───────────
+  ⚠️ KHÔNG reload → Dashboard không biết user mới
+  ✅ Reload → Nhận diện NGAY user vừa train
+
+THỜI GIAN:
+──────────
+  • 10 users: ~50ms
+  • 100 users: ~200ms
+  • 1000 users: ~2s
+
+================================================================================
+3. EMBEDDING VECTOR - KHÁI NIỆM CHI TIẾT
+================================================================================
+
+ĐỊNH NGHĨA:
+───────────
+  Embedding = Vector số đại diện cho khuôn mặt trong không gian 512 chiều
+
+CẤU TRÚC:
+─────────
+  Type: NumPy array
+  Shape: (512,)
+  Dtype: float32
+  Range: Không giới hạn (thực tế: -10 đến +10)
+
+VÍ DỤ:
+──────
+  embedding = array([
+      0.123,    # Chiều 0
+      -0.456,   # Chiều 1
+      0.789,    # Chiều 2
+      ...       # ...
+      0.234     # Chiều 511
+  ], dtype=float32)
+
+SO SÁNH 2 EMBEDDINGS:
+─────────────────────
+  PHƯƠNG PHÁP: Cosine Similarity
+  
+  Công thức:
+    similarity = cos(θ) = (A · B) / (||A|| × ||B||)
+  
+  Nếu đã normalize (||A|| = ||B|| = 1):
+    similarity = A · B (dot product)
+  
+  CODE:
+    sim = np.dot(emb_A, emb_B)
+  
+  KẾT QUẢ:
+    • sim = 1.0: Hoàn toàn giống nhau
+    • sim = 0.8-0.9: Rất giống (cùng người)
+    • sim = 0.5-0.7: Tương tự (có thể cùng người)
+    • sim = 0.0-0.4: Khác nhau
+    • sim = -1.0: Hoàn toàn ngược
+
+VÍ DỤ CỤ THỂ:
+──────────────
+  User A - Ảnh 1: [0.5, 0.3, 0.8, ...]
+  User A - Ảnh 2: [0.52, 0.31, 0.79, ...]
+  → Similarity: 0.98 (cùng người) ✓
+  
+  User A: [0.5, 0.3, 0.8, ...]
+  User B: [-0.3, 0.7, -0.2, ...]
+  → Similarity: 0.15 (khác người) ✓
+
+TẠI SAO 512 CHIỀU?
+──────────────────
+  • Nhiều hơn: Chính xác hơn nhưng chậm + tốn RAM
+  • Ít hơn: Nhanh nhưng thiếu thông tin
+  • 512: Sweet spot (balance tốt)
+
+CÁC MODEL KHÁC:
+───────────────
+  ┌────────────────┬──────────────┬──────────────┐
+  │ Model          │ Dimensions   │ Accuracy     │
+  ├────────────────┼──────────────┼──────────────┤
+  │ FaceNet        │ 128          │ 99.6%        │
+  │ ArcFace        │ 512          │ 99.8% ✓      │
+  │ CosFace        │ 512          │ 99.7%        │
+  │ Dlib           │ 128          │ 99.4%        │
+  └────────────────┴──────────────┴──────────────┘
+
+================================================================================
+4. MEAN EMBEDDING - TẠI SAO DÙNG?
+================================================================================
+
+VẤN ĐỀ:
+───────
+  1 user có 20 ảnh → 20 embeddings
+  Lưu CẢ 20 hay CHỈ 1?
+
+PHƯƠNG ÁN 1: LƯU TẤT CẢ 20 EMBEDDINGS
+──────────────────────────────────────
+  ✅ Ưu điểm:
+     • Giữ nguyên thông tin từng ảnh
+     • Nhận diện tốt với nhiều góc độ
+  
+  ❌ Nhược điểm:
+     • Database lớn (20x)
+     • Nhận diện chậm (20 lần so sánh)
+     • RAM usage cao
+
+PHƯƠNG ÁN 2: CHỈ LƯU ẢNH TỐT NHẤT
+──────────────────────────────────
+  ✅ Ưu điểm:
+     • Database nhỏ
+     • Nhanh
+  
+  ❌ Nhược điểm:
+     • Phụ thuộc 1 ảnh duy nhất
+     • Nếu ảnh "tốt nhất" không đại diện → Nhận diện kém
+
+PHƯƠNG ÁN 3: MEAN EMBEDDING ⭐ ĐƯỢC CHỌN
+───────────────────────────────────────
+  ✅ Ưu điểm:
+     • Database nhỏ (1 embedding/user)
+     • Nhanh (1 lần so sánh)
+     • Bao quát TẤT CẢ thông tin từ 20 ảnh
+     • Giảm noise (ảnh xấu ảnh hưởng ít)
+     • Robust với variations
+  
+  ⚠️ Nhược điểm:
+     • Mất thông tin chi tiết từng ảnh
+     • Nếu có outlier (ảnh rất xấu) → Ảnh hưởng mean
+       → Giải pháp: Quality filter trước khi mean
+
+SO SÁNH HIỆU NĂNG:
+──────────────────
+  ┌─────────────────┬──────────┬──────────┬────────────┐
+  │ Metric          │ All (20) │ Best (1) │ Mean (1) ✓ │
+  ├─────────────────┼──────────┼──────────┼────────────┤
+  │ DB Size (10 u)  │ 100 MB   │ 5 MB     │ 5 MB       │
+  │ Recognition     │ 400ms    │ 20ms     │ 20ms       │
+  │ Accuracy        │ 99.5%    │ 98.0%    │ 99.2%      │
+  │ Robustness      │ High     │ Low      │ High       │
+  └─────────────────┴──────────┴──────────┴────────────┘
+
+CÔNG NGHỆ TƯƠNG TỰ:
+────────────────────
+  • Google FaceNet: Dùng mean
+  • Facebook DeepFace: Dùng mean
+  • Microsoft Face API: Dùng mean
+  → Industry standard ✓
+
+================================================================================
+5. 2 CHẾ ĐỘ TRAIN
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ CHẾ ĐỘ 1: TRAIN USER (Incremental) - MẶC ĐỊNH                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+KÍCH HOẠT:
+──────────
+  • Tự động: Sau khi chụp xong 20 ảnh
+  • Thủ công: Click "🧠 Trích xuất một người"
+
+QUY TRÌNH:
+──────────
+  1. Load existing embeddings.pkl
+  2. Extract embeddings từ raw/{user_code}/*.jpg
+  3. Tính mean embedding
+  4. IF user_code đã tồn tại:
+       → REPLACE embedding cũ
+     ELSE:
+       → APPEND embedding mới
+  5. Save embeddings.pkl
+  6. Reload recognizer
+
+ƯU ĐIỂM:
+────────
+  ✅ NHANH: Chỉ xử lý 1 user (~5s)
+  ✅ KHÔNG ẢNH HƯỞNG users khác
+  ✅ Incremental update
+
+NHƯỢC ĐIỂM:
+───────────
+  ⚠️ Nếu embeddings.pkl bị corrupt:
+     → Không thể recover
+  ⚠️ Không verify consistency
+
+KHI NÀO DÙNG:
+─────────────
+  • Thêm user mới
+  • Update ảnh user cũ
+  • Production (thường xuyên)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ CHẾ ĐỘ 2: TRAIN ALL (Full Retrain)                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+KÍCH HOẠT:
+──────────
+  • Thủ công: Click "🔄 Trích xuất tất cả"
+
+QUY TRÌNH:
+──────────
+  1. QUÉT TOÀN BỘ dataset/raw/
+  2. FOR EACH user_folder:
+       - Extract embeddings từ ảnh
+       - Tính mean
+  3. TẠO LẠI embeddings.pkl từ đầu
+  4. Save
+  5. Reload recognizer
+
+ƯU ĐIỂM:
+────────
+  ✅ CLEAN: Tạo lại database từ đầu
+  ✅ CONSISTENT: Tất cả users cùng process
+  ✅ FIX CORRUPTION: Nếu .pkl bị lỗi
+  ✅ INCLUDE NEW USERS: User có folder nhưng chưa train
+
+NHƯỢC ĐIỂM:
+───────────
+  ❌ CHẬM: Xử lý tất cả users (~10s cho 10 users)
+  ❌ CPU INTENSIVE
+
+KHI NÀO DÙNG:
+─────────────
+  • Lần đầu setup hệ thống
+  • Sau khi xóa nhiều users
+  • Nghi ngờ database bị lỗi
+  • Maintenance định kỳ
+
+SO SÁNH:
+────────
+  ┌─────────────────┬──────────────┬─────────────────┐
+  │ Metric          │ Train User   │ Train All       │
+  ├─────────────────┼──────────────┼─────────────────┤
+  │ Speed (1 user)  │ 5s ✓         │ 10s             │
+  │ Speed (10 users)│ 5s ✓         │ 50s             │
+  │ Incremental     │ ✓            │ ✗               │
+  │ Full rebuild    │ ✗            │ ✓               │
+  │ Fix corruption  │ ✗            │ ✓               │
+  │ Use case        │ Daily        │ Maintenance     │
+  └─────────────────┴──────────────┴─────────────────┘
+
+================================================================================
+6. OUTPUT FILES
+================================================================================
+
+SAU KHI TRAIN:
+──────────────
+  📂 dataset/
+      ├─ raw/
+      │   ├─ 1/
+      │   │   ├─ 1_xxx1.jpg (250 KB)
+      │   │   ├─ 1_xxx2.jpg (248 KB)
+      │   │   └─ ... (20 files)
+      │   ├─ 2/
+      │   │   └─ ... (20 files)
+      │   └─ ...
+      │
+      └─ face_embeddings.pkl (500 KB)  ← OUTPUT
+
+CHI TIẾT FILE PKL:
+──────────────────
+  File: face_embeddings.pkl
+  Format: Python Pickle (binary)
+  Encoding: Protocol 4 (Python 3.4+)
+  
+  Structure:
+  {
+      "names": [str, str, ...],           # <class 'list'>
+      "embeddings": [ndarray, ndarray, ...]  # <class 'list'>
+  }
+  
+  Example content:
+  {
+      "names": ["1", "2", "3", "4", "5"],
+      "embeddings": [
+          array([0.123, -0.456, ..., 0.789], dtype=float32),  # 512-D
+          array([0.234, 0.567, ..., -0.890], dtype=float32),  # 512-D
+          array([-0.345, 0.678, ..., 0.123], dtype=float32),  # 512-D
+          array([0.456, -0.789, ..., 0.234], dtype=float32),  # 512-D
+          array([0.567, 0.890, ..., -0.345], dtype=float32),  # 512-D
+      ]
+  }
+
+KÍCHế THƯỚC:
+───────────
+  1 embedding = 512 floats × 4 bytes = 2,048 bytes ≈ 2 KB
+  
+  Database size:
+  • 10 users: ~20 KB (pure data) + overhead ≈ 50 KB
+  • 100 users: ~200 KB + overhead ≈ 500 KB
+  • 1000 users: ~2 MB + overhead ≈ 5 MB
+
+ĐỌC FILE:
+─────────
+  import pickle
+  
+  with open('face_embeddings.pkl', 'rb') as f:
+      data = pickle.load(f)
+  
+  names = data["names"]
+  embeddings = data["embeddings"]
+  
+  print(f"Total users: {len(names)}")
+  print(f"Embedding shape: {embeddings[0].shape}")
+
+BACKUP:
+───────
+  ⚠️ File này RẤT QUAN TRỌNG!
+  
+  Khuyến nghị:
+  • Backup định kỳ (hàng ngày)
+  • Version control (git)
+  • Cloud storage
+  
+  Nếu mất:
+    → Phải train lại TOÀN BỘ (từ raw/*.jpg)
+
+================================================================================
+7. PERFORMANCE & QUALITY
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ THỜI GIAN XỬ LÝ                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+BREAKDOWN (1 user, 20 ảnh):
+  ┌──────────────────────────┬──────────┐
+  │ Step                     │ Time     │
+  ├──────────────────────────┼──────────┤
+  │ Load model (lần đầu)     │ 2-3s     │
+  │ Read 20 images           │ 0.5s     │
+  │ Detect faces (20×)       │ 1-2s     │
+  │ Extract embeddings (20×) │ 1-2s     │
+  │ Calculate mean           │ 0.01s    │
+  │ Normalize                │ 0.001s   │
+  │ Save to file             │ 0.1s     │
+  │ Reload recognizer        │ 0.05s    │
+  ├──────────────────────────┼──────────┤
+  │ TOTAL                    │ 5-8s     │
+  └──────────────────────────┴──────────┘
+
+TRAIN ALL (10 users):
+  ~50-80s (10× single user)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ CHẤT LƯỢNG EMBEDDING                                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+METRICS:
+────────
+  1. INTRA-CLASS SIMILARITY (Cùng người):
+     • Tốt: > 0.80
+     • Chấp nhận: 0.60 - 0.80
+     • Kém: < 0.60
+  
+  2. INTER-CLASS SIMILARITY (Khác người):
+     • Tốt: < 0.40
+     • Chấp nhận: 0.40 - 0.50
+     • Kém (nhầm lẫn): > 0.50
+  
+  3. EMBEDDING NORM:
+     • Should be: 1.0 (sau normalize)
+     • Tolerance: ±0.001
+
+TEST:
+─────
+  # Kiểm tra quality
+  from app.core.trainer import ModelTrainer
+  
+  trainer = ModelTrainer()
+  trainer.train_all()
+  
+  # Load và verify
+  with open('face_embeddings.pkl', 'rb') as f:
+      data = pickle.load(f)
+  
+  for i, emb in enumerate(data["embeddings"]):
+      norm = np.linalg.norm(emb)
+      print(f"User {i}: norm = {norm:.4f}")
+      # Should print ~1.0000
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ COMMON ISSUES & SOLUTIONS                                           │
+└─────────────────────────────────────────────────────────────────────┘
+
+VẤN ĐỀ 1: "No face detected"
+─────────────────────────────
+  Nguyên nhân:
+    • Ảnh quá mờ
+    • Face quá nhỏ trong khung
+    • Góc độ quá nghiêng
+  
+  Giải pháp:
+    ✅ Chụp lại ảnh với chất lượng tốt hơn
+    ✅ Đảm bảo face chiếm >30% khung hình
+    ✅ Đủ ánh sáng
+
+VẤN ĐỀ 2: Train chậm
+─────────────────────
+  Nguyên nhân:
+    • CPU yếu
+    • Nhiều users
+  
+  Giải pháp:
+    ✅ Dùng train_user thay vì train_all
+    ✅ Upgrade CPU
+    ✅ Giảm số ảnh (hiện tại: 20 → 10)
+
+VẤN ĐỀ 3: Nhận diện sai
+────────────────────────
+  Nguyên nhân:
+    • Embeddings chất lượng kém
+    • Ảnh training không đa dạng
+  
+  Giải pháp:
+    ✅ Chụp lại với nhiều góc độ
+    ✅ Đảm bảo ánh sáng tốt
+    ✅ Check similarity scores
+
+VẤN ĐỀ 4: File .pkl corrupt
+────────────────────────────
+  Nguyên nhân:
+    • App crash giữa chừng khi save
+    • Disk error
+  
+  Giải pháp:
+    ✅ Backup trước khi train
+    ✅ Train lại toàn bộ (train_all)
+
+================================================================================
+TÓM TẮT
+================================================================================
+
+QUY TRÌNH NHANH:
+────────────────
+  1. User chụp 20 ảnh
+  2. AI extract 20 embeddings (512-D vectors)
+  3. Tính mean → 1 embedding đại diện
+  4. Normalize (||emb|| = 1)
+  5. Save vào face_embeddings.pkl
+  6. Reload recognizer
+  7. ✅ Sẵn sàng nhận diện!
+
+KEY CONCEPTS:
+─────────────
+  • Embedding: 512-D vector đại diện khuôn mặt
+  • Mean: Trung bình 20 vectors → 1 vector
+  • Cosine Similarity: So sánh 2 embeddings
+  • Normalization: Scale vector về length = 1
+
+2 MODES:
+────────
+  • train_user: Nhanh, incremental (5s)
+  • train_all: Chậm, full rebuild (50s)
+
+OUTPUT:
+───────
+  face_embeddings.pkl:
+    - Structure: {"names": [...], "embeddings": [...]}
+    - Size: ~50 KB/user
+    - Format: Python Pickle
+
+QUALITY:
+────────
+  • Intra-class sim: >0.80 (cùng người)
+  • Inter-class sim: <0.40 (khác người)
+  • Norm: 1.0 (normalized)
+
+================================================================================
+END OF GUIDE
+================================================================================
+
+Contact: DACN Team - HUTECH 2025
+Last Updated: 2025-12-07 14:55:23

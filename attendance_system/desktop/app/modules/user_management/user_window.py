@@ -55,10 +55,10 @@ class UserManagementWindow:
                   command=self.open_capture).pack(side=tk.LEFT, padx=5)
         
         # Train Buttons
-        tk.Button(btn_frame, text="🧠 Train User (Append)", bg=COLORS["info"], fg="white", 
+        tk.Button(btn_frame, text="🧠 Trích xuất một người", bg=COLORS["info"], fg="white", 
                   command=self.train_selected_user).pack(side=tk.LEFT, padx=5)
                   
-        tk.Button(btn_frame, text="🔄 Train All (Reset)", bg=COLORS["purple"], fg="white", 
+        tk.Button(btn_frame, text="🔄 Trích xuất tất cả", bg=COLORS["purple"], fg="white", 
                   command=self.train_model).pack(side=tk.LEFT, padx=5)
                   
         tk.Button(btn_frame, text="Xóa", bg=COLORS["danger"], fg="white", 

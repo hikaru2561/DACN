@@ -1,0 +1,409 @@
+# HƯỚNG DẪN CHỨC NĂNG CHỤP ẢNH MẪU
+# Focus: Capture Modes & Quality Metrics
+# Version: 3.0 | Date: 2025-12-07
+
+================================================================================
+STEP 3: QUY TRÌNH CHỤP ẢNH (2 CHẾ ĐỘ)
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MODE 1: CHỤP THỦ CÔNG (Manual Capture)                             │
+└─────────────────────────────────────────────────────────────────────┘
+
+CÁCH THỨC:
+  • Click nút "📸 CHỤP THỦ CÔNG (Space)"
+  • Hoặc nhấn phím SPACE trên bàn phím
+
+ĐẶC ĐIỂM:
+  ✅ Chụp NGAY LẬP TỨC frame hiện tại
+  ✅ KHÔNG kiểm tra chất lượng
+  ✅ KHÔNG cần có khuôn mặt trong khung
+  ✅ User hoàn toàn kiểm soát
+
+KHI NÀO DÙNG:
+  • Muốn chụp góc độ cụ thể
+  • Cần kiểm soát từng ảnh
+  • Auto mode không hoạt động tốt (do ánh sáng xấu)
+
+LƯU Ý:
+  ⚠️ Có thể chụp nhầm ảnh KHÔNG CÓ MẶT
+  ⚠️ Có thể chụp ảnh BLUR/MỜ
+  → Cần cẩn thận khi sử dụng
+
+---
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MODE 2: CHỤP TỰ ĐỘNG (Auto Capture) - MẶC ĐỊNH TẮT                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+KÍCH HOẠT:
+  1. TÍCH VÀO checkbox "☑ Tự động chụp (Auto)"
+  2. Đứng trước camera
+  3. Hệ thống tự động chụp
+
+QUY TRÌNH TỰ ĐỘNG:
+  ┌──────────────────────────────────────────────────────┐
+  │ Bước 1: Phát hiện khuôn mặt (Face Detection)        │
+  │   → InsightFace AI scan frame hiện tại               │
+  │   → Tìm khuôn mặt trong ảnh                          │
+  │                                                       │
+  │ Bước 2: Kiểm tra điều kiện                           │
+  │   ✓ Có khuôn mặt? (face_detected = True/False)       │
+  │   ✓ Đủ thời gian chờ? (0.5s kể từ ảnh trước)        │
+  │                                                       │
+  │ Bước 3: Quyết định                                   │
+  │   IF điều kiện OK:                                   │
+  │      📸 Chụp ảnh tự động                             │
+  │      Log: "Captured X/20 (Conf: 0.98)"              │
+  │   ELSE:                                              │
+  │      ⏭️ Bỏ qua frame này, chờ frame tiếp             │
+  └──────────────────────────────────────────────────────┘
+
+INTERVAL (KHOẢNG CÁCH GIỮA CÁC ẢNH):
+  • 0.5 giây = 500ms
+  • Tại sao 0.5s?
+    → Đủ để người di chuyển đầu/thay đổi góc độ
+    → Không quá nhanh (tránh ảnh giống nhau)
+    → Không quá chậm (tránh user đợi lâu)
+
+  • Timeline ví dụ:
+    0.0s: Ảnh 1 (mặt thẳng)
+    0.5s: Ảnh 2 (đầu nghiêng trái)
+    1.0s: Ảnh 3 (đầu nghiêng phải)
+    1.5s: Ảnh 4 (cười)
+    ...
+    10.0s: Ảnh 20 ✓ Hoàn thành
+
+TỔNG THỜI GIAN:
+  20 ảnh × 0.5s = 10 giây (lý thuyết)
+  Thực tế: 12-15 giây (vì không phải frame nào cũng có face)
+
+ƯU ĐIỂM:
+  ✅ KHÔNG cần thao tác tay
+  ✅ Đảm bảo 100% ảnh CÓ KHUÔN MẶT
+  ✅ Ảnh đa dạng (nhiều góc độ khác nhau)
+  ✅ Nhanh (10-15 giây cho 20 ảnh)
+
+NHƯỢC ĐIỂM:
+  ⚠️ Phụ thuộc AI detection
+  ⚠️ Cần ánh sáng tốt
+  ⚠️ Nếu face không detect được → không chụp
+
+KHI NÀO DÙNG:
+  ✅ Điều kiện ánh sáng TỐOT (trong nhà, có đèn)
+  ✅ Muốn chụp NHANH
+  ✅ Muốn ảnh CHẤT LƯỢNG CAO
+
+================================================================================
+STEP 4: LƯU ẢNH & CÁC CHỈ SỐ CHẤT LƯỢNG
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ 4.1. CÁC CHỈ SỐ HIỂN THỊ TRÊN MÀN HÌNH                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────┐
+│                 CAMERA VIEW                       │
+│  ┌─────────────────────────────────────────┐     │
+│  │                                          │     │
+│  │  Conf: 0.98  ← [1]                      │     │
+│  │      ┌──────────────────┐               │     │
+│  │      │                  │               │     │
+│  │      │   🧑 KHUÔN MẶT    │ ← [2]         │     │
+│  │      │                  │               │     │
+│  │      └──────────────────┘               │     │
+│  │                                          │     │
+│  │  Photos: 15/20 | Face OK ✓ ← [3]        │     │
+│  └─────────────────────────────────────────┘     │
+│                                                   │
+│  [████████████████░░░░] 75% ← [4]                │
+│  Đã chụp: 15/20 ← [5]                            │
+│                                                   │
+│  ☐ Tự động chụp (Auto) ← [6]                     │
+│  [📸 CHỤP THỦ CÔNG] [Đóng]                       │
+└───────────────────────────────────────────────────┘
+
+GIẢI THÍCH CHI TIẾT:
+
+[1] CONFIDENCE SCORE (Conf: 0.98)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Ý NGHĨA:
+    • Độ tin cậy của AI khi phát hiện khuôn mặt
+    • Giá trị từ 0.0 → 1.0
+    • Càng cao = AI càng chắc chắn đó là khuôn mặt
+
+  CÁCH TÍNH:
+    • AI model (InsightFace) scan ảnh
+    • Tìm vùng có thể là khuôn mặt
+    • Tính xác suất: vùng đó THỰC SỰ là mặt người
+    
+  PHÂN LOẠI:
+    ┌──────────────┬─────────────────┬──────────────────────┐
+    │ Confidence   │ Ý nghĩa         │ Chất lượng           │
+    ├──────────────┼─────────────────┼──────────────────────┤
+    │ 0.95 - 1.0   │ Rất chắc chắn   │ ✅ Tuyệt vời        │
+    │ 0.85 - 0.95  │ Khá chắc chắn   │ ✅ Tốt              │
+    │ 0.70 - 0.85  │ Tạm được        │ ⚠️ Chấp nhận được   │
+    │ < 0.70       │ Không chắc      │ ❌ Kém              │
+    └──────────────┴─────────────────┴──────────────────────┘
+
+  VÍ DỤ:
+    • Conf: 0.98 → AI 98% chắc đó là khuôn mặt
+    • Conf: 0.65 → AI chỉ 65% chắc (có thể lầm)
+
+  LƯU Ý:
+    • Conf CAO không có nghĩa ảnh KHÔNG BỊ MỜ
+    • Conf CHỈ đo "có phải mặt người không"
+    • Ảnh mờ vẫn có thể có Conf cao!
+
+[2] BOUNDING BOX (Khung xanh)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Ý NGHĨA:
+    • Khung hình chữ nhật BAO QUANH khuôn mặt
+    • Màu XANH LÁ: Face detected ✓
+    • KHÔNG CÓ KHUNG: Không phát hiện face ✗
+
+  MỤC ĐÍCH:
+    • Cho user thấy AI NHÌN THẤY GÌ
+    • Xác nhận vị trí khuôn mặt
+    • Giúp user điều chỉnh tư thế
+
+  KỸ THUẬT:
+    • AI trả về tọa độ: (x, y, width, height)
+    • Vẽ rectangle từ tọa độ đó
+    • Example: (120, 80, 250, 300)
+      → Top-left: (120, 80)
+      → Size: 250px wide × 300px tall
+
+[3] STATUS TEXT (Photos: 15/20 | Face OK ✓)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CẤU TRÚC:
+    Photos: X/Y | Status
+    
+  PHẦN 1: "Photos: 15/20"
+    • X = Số ảnh ĐÃ CHỤP
+    • Y = Mục tiêu (luôn là 20)
+    • Ví dụ: "Photos: 15/20" = Đã chụp 15, còn thiếu 5
+
+  PHẦN 2: Status
+    • "Face OK ✓" (màu XANH)
+      → Có khuôn mặt, sẵn sàng chụp
+      
+    • "No Face ✗" (màu ĐỎ)
+      → KHÔNG có khuôn mặt
+      → Nếu auto mode: KHÔNG chụp
+      → Nếu manual mode: Vẫn chụp được (nhưng không nên)
+
+[4] PROGRESS BAR (75%)
+━━━━━━━━━━━━━━━━━━━━
+  CÁCH TÍNH:
+    Progress% = (Photos_taken / 20) × 100
+    
+  VÍ DỤ:
+    • 0/20 ảnh  → 0%   [░░░░░░░░░░░░░░░░░░░░]
+    • 5/20 ảnh  → 25%  [█████░░░░░░░░░░░░░░░]
+    • 10/20 ảnh → 50%  [██████████░░░░░░░░░░]
+    • 15/20 ảnh → 75%  [███████████████░░░░░]
+    • 20/20 ảnh → 100% [████████████████████]
+
+  MÀU SẮC:
+    • Màu XANH DƯƠNG: Đang chụp
+    • Chuyển sang INDETERMINATE (chạy qua lại):
+      → Khi bắt đầu training
+
+[5] STATUS LABEL (Đã chụp: 15/20)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TRẠNG THÁI:
+    • "Đang chờ khuôn mặt..." (ban đầu)
+    • "Đã chụp: X/20" (đang chụp)
+    • "🧠 Đang trích xuất đặc trưng..." (training)
+    • "✅ Hoàn thành!" (done)
+
+[6] AUTO CHECKBOX
+━━━━━━━━━━━━━━━
+  TRẠNG THÁI:
+    ☐ (TRỐNG) → MẶC ĐỊNH - Chụp thủ công
+    ☑ (TÍCH)  → Auto mode bật
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ 4.2. QUY TRÌNH LƯU ẢNH CHI TIẾT                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+Khi button "Chụp" được trigger (manual hoặc auto):
+
+BƯỚC 1: KIỂM TRA DUPLICATE (CHỈ ẢNH ĐẦU TIÊN)
+├─────────────────────────────────────────────────────
+│ IF photos_taken == 0:  ← Chỉ check lần đầu
+│     
+│     1. Extract embedding từ frame hiện tại
+│        → AI tạo 512-D vector đại diện khuôn mặt
+│     
+│     2. So sánh với TẤT CẢ users trong database
+│        → Tính độ tương đồng (similarity)
+│     
+│     3. Tìm match tốt nhất:
+│        
+│        IF similarity > 0.5:  ← Ngưỡng nhận diện
+│            
+│            A. Match với USER KHÁC:
+│               ┌──────────────────────────────────┐
+│               │ ⚠️ CẢNH BÁO                      │
+│               │                                  │
+│               │ Khuôn mặt đã được đăng ký!       │
+│               │ 👤 User: Nguyen Van A            │
+│               │ 🆔 ID: 123                       │
+│               │ 📊 Similarity: 87.5%             │
+│               │                                  │
+│               │ → TỰ ĐỘNG ĐÓNG WINDOW            │
+│               │ → KHÔNG lưu ảnh                  │
+│               └──────────────────────────────────┘
+│            
+│            B. Match với CHÍNH USER NÀY:
+│               ✅ "Face belongs to user X"
+│               → OK, tiếp tục (re-capture case)
+│        
+│        ELSE (similarity < 0.5):
+│            ✅ Khuôn mặt MỚI
+│            → OK, tiếp tục
+└─────────────────────────────────────────────────────
+
+GIẢI THÍCH SIMILARITY:
+  • Độ tương đồng giữa 2 khuôn mặt
+  • Tính bằng Cosine Similarity
+  • Công thức: cos(θ) = (A·B) / (||A|| × ||B||)
+    
+  PHÂN LOẠI:
+    ┌──────────────┬────────────────────────────────┐
+    │ Similarity   │ Ý nghĩa                        │
+    ├──────────────┼────────────────────────────────┤
+    │ 0.8 - 1.0    │ Gần như CHẮC CHẮN cùng người   │
+    │ 0.6 - 0.8    │ Rất có thể cùng người          │
+    │ 0.5 - 0.6    │ Có thể cùng người (ngưỡng)     │
+    │ 0.3 - 0.5    │ Khác người                     │
+    │ 0.0 - 0.3    │ Hoàn toàn khác người           │
+    └──────────────┴────────────────────────────────┘
+  
+  VÍ DỤ:
+    • Similarity = 0.87 (87%)
+      → 2 ảnh CÙNG 1 NGƯỜI (99% chắc chắn)
+    • Similarity = 0.42 (42%)
+      → 2 ảnh KHÁC NGƯỜI
+
+BƯỚC 2: LƯU FILE
+├─────────────────────────────────────────────────────
+│ Path: D:\HUTECH\DACN\dataset\raw\{user_code}\
+│ 
+│ Filename Format:
+│   {user_code}_{timestamp}.jpg
+│   
+│ VÍ DỤ:
+│   User code = "1"
+│   Timestamp = 1765088123456 (Unix ms)
+│   → "1_1765088123456.jpg"
+│ 
+│ Lệnh:
+│   cv2.imwrite(save_path, frame)
+│   → Lưu ảnh BGR format, JPEG compression
+└─────────────────────────────────────────────────────
+
+TIMESTAMP:
+  • Unix timestamp × 1000 (milliseconds)
+  • Đảm bảo mỗi file có tên UNIQUE
+  • Ví dụ:
+    2025-12-07 13:55:23.456
+    → 1765088123456
+
+BƯỚC 3: CẬP NHẬT UI
+├─────────────────────────────────────────────────────
+│ self.photos_taken += 1
+│ 
+│ Progress%  = (photos_taken / 20) × 100
+│ Status     = f"Đã chụp: {photos_taken}/20"
+│ 
+│ Console LOG:
+│   📸 Captured 15/20 (Conf: 0.98)
+└─────────────────────────────────────────────────────
+
+BƯỚC 4: KIỂM TRA HOÀN THÀNH
+├─────────────────────────────────────────────────────
+│ IF photos_taken >= 20:
+│     
+│     → TRIGGER AUTO TRAINING
+│     
+│     Status: "🧠 Đang trích xuất đặc trưng..."
+│     Progress bar: Indeterminate mode (chạy qua lại)
+│     
+│     Background thread:
+│       1. Load existing embeddings.pkl
+│       2. Extract embeddings từ 20 ảnh mới
+│       3. Tính mean embedding (512-D vector)
+│       4. Update/Append vào database
+│       5. Save embeddings.pkl
+│       6. RELOAD dashboard recognizer
+│     
+│     Kết quả:
+│       ┌────────────────────────────────────┐
+│       │ ✅ Thành công!                     │
+│       │                                    │
+│       │ Đã chụp và cập nhật model!         │
+│       │ ✅ Đã thêm user vào model!         │
+│       │ (Total: 10 users)                  │
+│       │                                    │
+│       │ Hệ thống nhận diện ngay!           │
+│       └────────────────────────────────────┘
+└─────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ 4.3. ĐẦU RA (OUTPUT FILES)                                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+SAU KHI CHỤP XONG 20 ẢNH:
+
+📂 dataset/raw/{user_code}/
+    ├─ 1_1765088100001.jpg  [250 KB]  ← Ảnh 1
+    ├─ 1_1765088100501.jpg  [248 KB]  ← Ảnh 2
+    ├─ 1_1765088101001.jpg  [252 KB]  ← Ảnh 3
+    ├─ ...
+    └─ 1_1765088110001.jpg  [251 KB]  ← Ảnh 20
+
+📄 dataset/face_embeddings.pkl
+    Updated với:
+    {
+        "names": [..., "1"],
+        "embeddings": [..., <512-D vector của user 1>]
+    }
+
+TỔNG DUNG LƯỢNG:
+  • 20 ảnh × ~250 KB = 5 MB/user
+  • embeddings.pkl: ~50 KB/user
+
+================================================================================
+TÓM TẮT
+================================================================================
+
+CHẾ ĐỘ CHỤP:
+  ┌────────────────┬──────────────────┬─────────────────────┐
+  │                │ Manual           │ Auto (Default OFF)  │
+  ├────────────────┼──────────────────┼─────────────────────┤
+  │ Trigger        │ Click / Space    │ AI tự động          │
+  │ Face required  │ ❌ Không         │ ✅ Bắt buộc        │
+  │ Speed          │ Tùy user         │ ~10s cho 20 ảnh     │
+  │ Quality        │ Không đảm bảo    │ ✅ 100% có face    │
+  │ Use case       │ Góc độ đặc biệt  │ Chụp nhanh          │
+  └────────────────┴──────────────────┴─────────────────────┘
+
+CHỈ SỐ QUAN TRỌNG:
+  • Confidence (Conf): 0.95+ = Tuyệt vời
+  • Similarity: >0.5 = Cùng người
+  • Interval: 0.5s = Đủ để đa dạng góc
+  • Photos: 20 ảnh = Đủ để AI học
+
+FLOW NHANH:
+  1. Tích Auto checkbox
+  2. Đứng trước cam
+  3. Chờ 10-15s
+  4. ✅ Done!
+
+================================================================================
+END OF GUIDE
+================================================================================

@@ -11,7 +11,7 @@ class LoginWindow:
         self.on_login_success = on_login_success
         
         # Configure root
-        self.root.title("Đăng nhập - Hệ thống điểm danh")
+        self.root.title("Đăng nhập - Hệ thống kiểm soát ra vào")
         self.root.geometry("500x550")
         self.root.resizable(False, False)
         self.root.configure(bg=COLORS["white"])
@@ -34,14 +34,14 @@ class LoginWindow:
     def create_widgets(self):
         """Tạo giao diện đăng nhập"""
         # Header bar
-        header = tk.Frame(self.root, bg=COLORS["primary"], height=120)
+        header = tk.Frame(self.root, bg=COLORS["primary"], height=150)  # Tăng từ 120 → 150
         header.pack(fill=tk.X)
         header.pack_propagate(False)
         
         # Icon in header
         icon_label = tk.Label(
             header,
-            text="🎓",
+            text="🔐",
             font=("Segoe UI", 48),
             bg=COLORS["primary"],
             fg=COLORS["white"]
@@ -51,7 +51,7 @@ class LoginWindow:
         title_label = tk.Label(
             header, 
             text="HỆ THỐNG KIỂM SOÁT RA VÀO",
-            font=("Segoe UI", 16, "bold"),
+            font=("Segoe UI", 14, "bold"),  # Giảm từ 16 → 14
             fg=COLORS["white"],
             bg=COLORS["primary"]
         )
@@ -174,7 +174,7 @@ class LoginWindow:
         
         footer_label = tk.Label(
             footer,
-            text="© 2025 HUTECH - Hệ thống điểm danh tự động",
+            text="© 2025 HUTECH - Hệ thống kiểm soát ra vào bằng nhận diện khuôn mặt",
             font=("Segoe UI", 8),
             bg=COLORS["light"],
             fg=COLORS["text_secondary"]
