@@ -459,25 +459,10 @@ Giải pháp:
 | Liveness Detection | 95% (Blink EAR) |
 | Stream Latency | < 200ms |
 | Recognition Time | 200-500ms |
-| Training Time (20 ảnh) | 5-8 giây |
+| Embedding Time (20 ảnh) | 5-8 giây |
 
 ---
 
-## 📜 LICENSE
-
-MIT License - Copyright (c) 2025 HUTECH
-
----
-
-## 👨‍💻 TÁC GIẢ
-
-**Đồ án tốt nghiệp - HUTECH 2025**
-
-| Thành viên | MSSV | Vai trò |
-|------------|------|---------|
-| [Tên sinh viên] | [MSSV] | Developer |
-
----
 
 ## 🙏 ACKNOWLEDGMENTS
 
@@ -487,5 +472,3 @@ MIT License - Copyright (c) 2025 HUTECH
 - [ESP32-CAM](https://github.com/espressif/esp32-camera) - Camera Library
 
 ---
-
-**⭐ Star this repo if you find it helpful!**
